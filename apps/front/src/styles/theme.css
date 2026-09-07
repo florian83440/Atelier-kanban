@@ -631,3 +631,89 @@ body {
 .tb-lastlog.system { border-left-color: var(--accent-blue); }
 
 .tb-detail { align-self: flex-start; }
+
+/* ================= PAGE COMMUNE : REGLES / LOBBY ================= */
+.lobby { max-width: 1100px; margin: 0 auto; }
+
+.lobby-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 10px 16px;
+  margin-bottom: 8px;
+}
+.lobby-brand { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px; }
+.lobby-brand .app-icon { color: var(--accent-blue); }
+.lobby-code { font-size: 12px; color: var(--text-muted); }
+.lobby-code strong { color: var(--text-main); }
+.lobby-bar .btn { margin-left: auto; }
+
+.rules {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 16px 18px;
+}
+.rules-title { margin: 0 0 4px; font-size: 15px; font-weight: 800; }
+.rules-lead { margin: 0 0 14px; font-size: 12px; color: var(--text-main); }
+.rules-lead strong { white-space: nowrap; }
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0;
+  border: 1px solid var(--border-light);
+}
+.rules-card {
+  border: 1px solid var(--border-light);
+  margin: -1px 0 0 -1px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.rules-card h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rules-card h3 .app-icon { color: var(--accent-blue); }
+.rules-card p { margin: 3px 0; }
+.rules-card .app-icon { vertical-align: -0.15em; }
+.muted { color: var(--text-muted); }
+
+.lobby-foot {
+  margin-top: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 14px 16px;
+}
+.lobby-foot--wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.lobby-teams h3 { margin: 0 0 6px; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 5px; }
+.lobby-team-list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.lobby-team-list li {
+  border: 1px solid var(--border-light);
+  background: #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.lobby-team-list .app-icon { vertical-align: -0.15em; }
+.lobby-start { margin-top: 10px; font-size: 13px; padding: 10px 20px; }
+.lobby-hint { margin: 6px 0 0; font-size: 11px; }
