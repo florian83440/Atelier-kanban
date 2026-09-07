@@ -298,8 +298,10 @@ body {
 
 .deadline-tag.overdue { color: var(--accent-red); background: rgba(209, 52, 56, 0.12); }
 
-.card-accept-btn { display: block; width: 100%; margin-top: 6px; }
+.incoming-actions { display: flex; gap: 4px; margin-top: 6px; }
+.card-accept-btn { flex: 1; }
 .card-accept-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.card-reject-btn { flex: 0 0 auto; padding: 6px 8px; }
 
 .dropzone-stage {
   background: var(--bg-dropzone);
@@ -358,7 +360,6 @@ body {
 .token.analyst { background: #f2e7ff; border: 1px solid var(--accent-purple); color: #6b21a8; }
 .token.dev { background: #dcecfb; border: 1px solid var(--accent-blue); color: #1e40af; }
 .token.qa { background: #fdefcf; border: 1px solid var(--accent-amber); color: #8a5a00; }
-.token.locked { cursor: not-allowed; opacity: 0.7; border-style: double; }
 .token.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); background: #fbe3e3 !important; border-color: var(--accent-red) !important; }
 
 /* SIDEBAR */

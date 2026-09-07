@@ -8,10 +8,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['activate']);
 
-const blocked = () => props.member.disabled || props.member.isLocked;
-
 function onClick() {
-  if (blocked()) return;
+  if (props.member.disabled) return;
   emit('activate', props.member.id);
 }
 </script>
@@ -22,13 +20,12 @@ function onClick() {
     :class="[
       member.role,
       {
-        locked: member.isLocked && !member.disabled,
         disabled: member.disabled,
         selected,
-        clickable: !blocked(),
+        clickable: !member.disabled,
       },
     ]"
-    :title="blocked() ? 'Indisponible' : 'Cliquer pour sélectionner / retirer'"
+    :title="member.disabled ? 'Indisponible' : 'Cliquer pour sélectionner / retirer'"
     @click="onClick"
   >
     <AppIcon :name="member.role" />
@@ -36,6 +33,5 @@ function onClick() {
     <span v-if="member.disabled" class="token-flag">
       <AppIcon name="blocked" /><template v-if="blockLeft > 0"> {{ blockLeft }}&nbsp;spr.</template>
     </span>
-    <AppIcon v-else-if="member.isLocked" name="locked" class="token-flag" />
   </div>
 </template>

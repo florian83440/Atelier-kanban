@@ -20,11 +20,24 @@ export const STAFF_ROSTER = [
 export const STAFF_COUNT = STAFF_ROSTER.length;
 
 // Modeles d'appels d'offres. dur = nb de sprints par etape, req = effectif requis par etape.
+//  - tier 'fast' : peu rentable mais tres court, de plus en plus frequent en fin de partie
+//  - tier 'std'  : le socle, disponible du debut a la fin
+//  - tier 'big'  : gros budget, long ; ne se debloque qu'a partir de `minSprint`
+//  - minSprint : sprint minimal a partir duquel le modele peut apparaitre (defaut 1)
 export const PROJECT_TEMPLATES = [
-  { name: 'Portail Client', type: 'front', value: 15000, dur: { analyse: 1, dev: 2, test: 1 }, req: { analyst: 1, dev: 2, qa: 1 }, margin: 2 },
-  { name: 'Refonte e-Com', type: 'full', value: 35000, dur: { analyse: 2, dev: 3, test: 2 }, req: { analyst: 1, dev: 3, qa: 2 }, margin: 3 },
-  { name: 'Microservices', type: 'back', value: 25000, dur: { analyse: 1, dev: 2, test: 2 }, req: { analyst: 1, dev: 2, qa: 2 }, margin: 2 },
-  { name: 'App IoT', type: 'back', value: 40000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  // --- rapides ---
+  { name: 'Correctif Express', tier: 'fast', type: 'front', value: 6000, dur: { analyse: 1, dev: 1, test: 1 }, req: { analyst: 1, dev: 1, qa: 1 }, margin: 2 },
+  { name: 'Hotfix Prod', tier: 'fast', type: 'back', value: 5000, dur: { analyse: 1, dev: 1, test: 1 }, req: { analyst: 1, dev: 1, qa: 1 }, margin: 1 },
+  { name: 'Micro-feature', tier: 'fast', type: 'full', value: 9000, dur: { analyse: 1, dev: 1, test: 1 }, req: { analyst: 1, dev: 2, qa: 1 }, margin: 2 },
+  // --- socle ---
+  { name: 'Portail Client', tier: 'std', type: 'front', value: 15000, dur: { analyse: 1, dev: 2, test: 1 }, req: { analyst: 1, dev: 2, qa: 1 }, margin: 2 },
+  { name: 'Microservices', tier: 'std', type: 'back', value: 25000, dur: { analyse: 1, dev: 2, test: 2 }, req: { analyst: 1, dev: 2, qa: 2 }, margin: 2 },
+  { name: 'Refonte e-Com', tier: 'std', type: 'full', value: 35000, dur: { analyse: 2, dev: 3, test: 2 }, req: { analyst: 1, dev: 3, qa: 2 }, margin: 3 },
+  { name: 'App IoT', tier: 'std', type: 'back', value: 40000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  // --- gros budgets (fin de partie) ---
+  { name: 'Plateforme SaaS', tier: 'big', minSprint: 8, type: 'full', value: 55000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  { name: 'Migration Legacy', tier: 'big', minSprint: 8, type: 'back', value: 60000, dur: { analyse: 2, dev: 4, test: 3 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  { name: 'Refonte Groupe', tier: 'big', minSprint: 12, type: 'full', value: 90000, dur: { analyse: 3, dev: 5, test: 3 }, req: { analyst: 2, dev: 5, qa: 2 }, margin: 4 },
 ];
 
 // Incidents RH. action est un descripteur applique par shared/logic.applyIncident

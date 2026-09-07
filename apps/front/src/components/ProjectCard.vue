@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { typeLabel, WIP_LIMITS } from '@kanban-it/shared';
-import { state, acceptProject, assignPicked, unassignStaff, malusLeft } from '../net/useGame.js';
+import { state, acceptProject, rejectProject, assignPicked, unassignStaff, malusLeft } from '../net/useGame.js';
 import StaffToken from './StaffToken.vue';
 import AppIcon from './AppIcon.vue';
 
@@ -65,11 +65,13 @@ function onZoneClick(ev) {
 }
 
 function onRemove(member) {
-  if (member.disabled || member.isLocked) return;
+  if (member.disabled) return;
   unassignStaff(member.id);
 }
 
 function fmt(n) { return n.toLocaleString('fr-FR'); }
+// Avancement fractionnaire (effectif partiel = progression partielle)
+function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 </script>
 
 <template>
@@ -89,14 +91,23 @@ function fmt(n) { return n.toLocaleString('fr-FR'); }
       <AppIcon name="qa" />{{ project.req.qa }}
     </div>
     <div class="deadline-tag"><AppIcon name="clock" /> Durée max : {{ project.totalTheoDur + project.margin }} sprints</div>
-    <button
-      class="btn btn-primary card-accept-btn"
-      :disabled="analyseFull"
-      @click="acceptProject(project.id)"
-    >
-      <template v-if="analyseFull">Colonne Analyse pleine</template>
-      <template v-else>Prendre en analyse <AppIcon name="arrowRight" /></template>
-    </button>
+    <div class="incoming-actions">
+      <button
+        class="btn btn-primary card-accept-btn"
+        :disabled="analyseFull"
+        @click="acceptProject(project.id)"
+      >
+        <template v-if="analyseFull">Colonne Analyse pleine</template>
+        <template v-else>Prendre en analyse <AppIcon name="arrowRight" /></template>
+      </button>
+      <button
+        class="btn btn-secondary card-reject-btn"
+        title="Écarter cette demande (remplacée par une nouvelle)"
+        @click="rejectProject(project.id)"
+      >
+        <AppIcon name="close" />
+      </button>
+    </div>
   </div>
 
   <!-- Carte projet sur le board -->
@@ -116,7 +127,7 @@ function fmt(n) { return n.toLocaleString('fr-FR'); }
       <span class="project-value">{{ fmt(project.value) }} €</span>
     </div>
     <div class="project-info">
-      Avancement : {{ project.progress }}/{{ targetDuration }} tour(s)
+      Avancement : {{ fmtProgress(project.progress) }}/{{ targetDuration }} tour(s)
       <strong v-if="hasDisabled" class="frozen-tag">
         <AppIcon name="frozen" /> FIGÉ<template v-if="frozenLeft > 0"> — {{ frozenLeft }} sprint(s)</template>
       </strong>

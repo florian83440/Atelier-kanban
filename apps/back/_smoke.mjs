@@ -106,6 +106,12 @@ try {
   const e1 = await p1.waitFor('error');
   assert(/n'existe plus|impossible/i.test(e1.message), 'erreur renvoyee pour demande inconnue');
 
+  // --- Écarter une demande : retiree de la file, remplacee, file toujours a 3
+  const toReject = s1.team.incomingProjects[0].id;
+  p1.send({ type: 'rejectProject', projectId: toReject });
+  s1 = await p1.waitFor('snapshot', (m) => !m.team.incomingProjects.some((p) => p.id === toReject));
+  assert(s1.team.incomingProjects.length === 3, 'file toujours a 3 apres ecart (remplacement)');
+
   // --- Joueur 1 accepte un projet + affecte un PO
   const proj = s1.team.incomingProjects[0];
   p1.send({ type: 'acceptProject', projectId: proj.id });

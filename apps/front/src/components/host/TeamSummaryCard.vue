@@ -12,6 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['inspect']);
 
 function fmt(n) { return n.toLocaleString('fr-FR'); }
+function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 
 const net = computed(() => props.team.totalDeliveredValue - props.team.totalPenalties);
 
@@ -129,9 +130,9 @@ const lastLog = computed(() => props.team.log[0] || null);
             </span>
           </div>
           <div v-if="c.key !== 'done'" class="tb-proj-meta">
-            <div class="tb-bar"><div class="tb-bar-fill" :style="{ width: (p.progress / p.target) * 100 + '%' }"></div></div>
+            <div class="tb-bar"><div class="tb-bar-fill" :style="{ width: Math.min(100, (p.progress / p.target) * 100) + '%' }"></div></div>
             <span class="tb-proj-nums">
-              {{ p.progress }}/{{ p.target }} · éch. S{{ p.deadline }} ·
+              {{ fmtProgress(p.progress) }}/{{ p.target }} · éch. S{{ p.deadline }} ·
               {{ p.have }}/{{ p.needCount }}<AppIcon v-if="p.needRole" :name="p.needRole" />
             </span>
           </div>

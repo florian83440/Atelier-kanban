@@ -4,6 +4,7 @@
 
 import {
   acceptProject,
+  rejectProject,
   assignStaff,
   unassignStaff,
   startGame,
@@ -147,7 +148,7 @@ function handleJoinGame(ws, msg) {
 
 // ---------------------------------------------------------------- intents / controle
 
-const PLAYER_INTENTS = new Set(['acceptProject', 'assignStaff', 'unassignStaff']);
+const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'assignStaff', 'unassignStaff']);
 const HOST_CONTROLS = new Set(['startGame', 'validateSprint', 'adjustTimer', 'resetGame']);
 
 const INTENT_ERRORS = {
@@ -174,6 +175,7 @@ function handlePlayerIntent(ws, msg) {
 
   let res = { ok: true };
   if (msg.type === 'acceptProject') res = acceptProject(team, msg.projectId, room.game.sprint);
+  else if (msg.type === 'rejectProject') res = rejectProject(team, msg.projectId, room.game.sprint);
   else if (msg.type === 'assignStaff') res = assignStaff(team, msg.staffId, msg.projectId);
   else if (msg.type === 'unassignStaff') res = unassignStaff(team, msg.staffId);
 

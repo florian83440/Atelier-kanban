@@ -56,7 +56,7 @@ function removeFromAssignments(team, staffId) {
 function freeAssigned(team, project) {
   for (const id of project.assigned) {
     const s = findStaff(team, id);
-    if (s) { s.isLocked = false; s.assignedSeq = 0; }
+    if (s) s.assignedSeq = 0;
   }
   project.assigned = [];
 }
@@ -65,6 +65,27 @@ function freeAssigned(team, project) {
 function projectOfStaff(team, staffId) {
   return team.activeProjects.find((p) => p.stage !== 'done' && p.assigned.includes(staffId)) || null;
 }
+
+// Efficacite d'un dev sur un projet selon sa specialite : plein regime (1) s'il
+// est du bon type, demi-regime (0.5) sinon. Un dev "full" convient partout ;
+// un projet "full" n'est couvert a plein que par des devs "full".
+export function devEffectiveness(devSpec, projectType) {
+  if (devSpec === 'full') return 1;
+  if (projectType === 'full') return 0.5;
+  return devSpec === projectType ? 1 : 0.5;
+}
+
+// Somme des efficacites des devs affectes au projet (2 devs "hors type" = 1).
+function effectiveDevs(team, project) {
+  let total = 0;
+  for (const id of project.assigned) {
+    const s = findStaff(team, id);
+    if (s && s.role === 'dev' && !s.disabled) total += devEffectiveness(s.spec, project.type);
+  }
+  return total;
+}
+
+const PROGRESS_EPS = 1e-9;
 
 // ---------------------------------------------------------------- intents joueur
 
@@ -89,9 +110,20 @@ export function acceptProject(team, projId, sprint) {
   return { ok: true };
 }
 
+// Écarte une demande de la file d'attente et la remplace aussitôt par une
+// nouvelle (évite de rester bloqué avec, p. ex., uniquement des projets back).
+export function rejectProject(team, projId, sprint, rng = Math.random) {
+  const idx = team.incomingProjects.findIndex((p) => p.id === projId);
+  if (idx === -1) return { ok: false, reason: 'not-found' };
+  const [proj] = team.incomingProjects.splice(idx, 1);
+  logEvent(team, `DEMANDE ÉCARTÉE : ${proj.name} retirée de la file.`, 'system', sprint);
+  createIncomingProject(team, rng, sprint);
+  return { ok: true };
+}
+
 export function assignStaff(team, staffId, projId) {
   const member = findStaff(team, staffId);
-  if (!member || member.disabled || member.isLocked) return { ok: false, reason: 'blocked' };
+  if (!member || member.disabled) return { ok: false, reason: 'blocked' };
   const target = team.activeProjects.find((p) => p.id === projId);
   if (!target) return { ok: false, reason: 'not-found' };
 
@@ -103,7 +135,7 @@ export function assignStaff(team, staffId, projId) {
 
 export function unassignStaff(team, staffId) {
   const member = findStaff(team, staffId);
-  if (!member || member.disabled || member.isLocked) return { ok: false, reason: 'blocked' };
+  if (!member || member.disabled) return { ok: false, reason: 'blocked' };
   removeFromAssignments(team, staffId);
   return { ok: true };
 }
@@ -188,7 +220,13 @@ export function applyIncident(team, card, sprint) {
 export function drawIncident(team, sprint, rng = Math.random) {
   const type = rng() < MALUS_DRAW_RATIO ? 'malus' : 'bonus';
   const deck = type === 'bonus' ? BONUS_CARDS : MALUS_CARDS;
-  const card = deck[Math.floor(rng() * deck.length)];
+  let card = deck[Math.floor(rng() * deck.length)];
+  // Jamais deux fois le même incident d'affilée (si le deck offre une alternative).
+  if (card.id === team.lastIncidentId && deck.length > 1) {
+    const others = deck.filter((c) => c.id !== team.lastIncidentId);
+    card = others[Math.floor(rng() * others.length)];
+  }
+  team.lastIncidentId = card.id;
   team.drawnCard = { id: card.id, title: card.title, type: card.type, effect: card.effect, sprint };
   logEvent(team, `INCIDENT AUTOMATIQUE : ${card.title} — ${card.effect}`, card.type, sprint);
   applyIncident(team, card, sprint);
@@ -203,13 +241,6 @@ export function processSprint(team, sprint, rng = Math.random) {
   for (const p of team.activeProjects) {
     const details = getAssignedDetails(team, p);
 
-    if (p.assigned.length > 0) {
-      for (const id of p.assigned) {
-        const s = findStaff(team, id);
-        if (s) s.isLocked = true;
-      }
-    }
-
     if (p.stage !== 'done' && sprint > p.maxSprintDeadline) {
       team.totalPenalties += PENALTY;
       logEvent(team, `ÉCHÉANCE DÉPASSÉE : ${p.name} est en retard ! -${PENALTY.toLocaleString('fr-FR')} € pénalité.`, 'malus', sprint);
@@ -221,9 +252,11 @@ export function processSprint(team, sprint, rng = Math.random) {
     }
 
     if (p.stage === 'analyse') {
-      if (details.analyst >= p.req.analyst) {
-        p.progress++;
-        if (p.progress >= p.dur.analyse) {
+      // Avancement proportionnel : effectif affecté / effectif requis, plafonné à 1.
+      const rate = Math.min(1, details.analyst / p.req.analyst);
+      if (rate > 0) {
+        p.progress += rate;
+        if (p.progress >= p.dur.analyse - PROGRESS_EPS) {
           const devCount = team.activeProjects.filter((x) => x.stage === 'dev').length;
           if (devCount < WIP_LIMITS.dev) {
             p.stage = 'dev';
@@ -231,32 +264,18 @@ export function processSprint(team, sprint, rng = Math.random) {
             logEvent(team, `${p.name} : specs terminées -> transmis en DÉVELOPPEMENT.`, 'bonus', sprint);
             freeAssigned(team, p);
           } else {
+            p.progress = p.dur.analyse;
             logEvent(team, `WIP DEV SATURÉ : ${p.name} reste en Analyse (Dev à ${WIP_LIMITS.dev}).`, 'malus', sprint);
           }
         }
       }
     } else if (p.stage === 'dev') {
-      if (details.dev >= p.req.dev) {
-        let mismatch = false;
-        if (p.type === 'back' && details.devSpecs.includes('front') && !details.devSpecs.includes('back') && !details.devSpecs.includes('full')) {
-          mismatch = true;
-        } else if (p.type === 'front' && details.devSpecs.includes('back') && !details.devSpecs.includes('front') && !details.devSpecs.includes('full')) {
-          mismatch = true;
-        }
-
-        const uniqueSpecs = new Set(details.devSpecs);
-        if (details.dev >= 3 && uniqueSpecs.size === 1) {
-          mismatch = true;
-          logEvent(team, `MONO-COMPÉTENCE : équipe de 3+ devs d'un seul profil sur ${p.name} (+1 tour) !`, 'malus', sprint);
-        }
-
-        if (mismatch) {
-          p.dur.dev += 1;
-          logEvent(team, `INCOMPATIBILITÉ TECHNIQUE sur ${p.name} : devs inadaptés (durée rallongée) !`, 'malus', sprint);
-        }
-
-        p.progress++;
-        if (p.progress >= p.dur.dev) {
+      // Efficacité des devs : hors type = demi-régime (2 hors type = 1). Pas de
+      // malus de tour, l'avancement est simplement plus lent.
+      const rate = Math.min(1, effectiveDevs(team, p) / p.req.dev);
+      if (rate > 0) {
+        p.progress += rate;
+        if (p.progress >= p.dur.dev - PROGRESS_EPS) {
           const testCount = team.activeProjects.filter((x) => x.stage === 'test').length;
           if (testCount < WIP_LIMITS.test) {
             p.stage = 'test';
@@ -264,14 +283,16 @@ export function processSprint(team, sprint, rng = Math.random) {
             logEvent(team, `${p.name} : dev terminé -> transmis en TEST / QA.`, 'bonus', sprint);
             freeAssigned(team, p);
           } else {
+            p.progress = p.dur.dev;
             logEvent(team, `WIP TEST SATURÉ : ${p.name} reste en Dev (QA à ${WIP_LIMITS.test}).`, 'malus', sprint);
           }
         }
       }
     } else if (p.stage === 'test') {
-      if (details.qa >= p.req.qa) {
-        p.progress++;
-        if (p.progress >= p.dur.test) {
+      const rate = Math.min(1, details.qa / p.req.qa);
+      if (rate > 0) {
+        p.progress += rate;
+        if (p.progress >= p.dur.test - PROGRESS_EPS) {
           p.stage = 'done';
           p.progress = 0;
           team.totalDeliveredValue += p.value;
@@ -297,7 +318,7 @@ export function processSprint(team, sprint, rng = Math.random) {
     }
   }
 
-  if (team.incomingProjects.length < MAX_INCOMING) createIncomingProject(team, rng);
+  if (team.incomingProjects.length < MAX_INCOMING) createIncomingProject(team, rng, sprint);
 
   team.history.labels.push(`T${sprint}`);
   team.history.revenue.push(team.totalDeliveredValue);
