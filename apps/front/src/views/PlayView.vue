@@ -11,10 +11,17 @@ import EventLog from '../components/EventLog.vue';
 import MetricsPanel from '../components/MetricsPanel.vue';
 import EndModal from '../components/EndModal.vue';
 import AppIcon from '../components/AppIcon.vue';
+import DirectionRoom from './DirectionRoom.vue';
+import DeliveryRoom from './DeliveryRoom.vue';
+import LiaisonRoom from './LiaisonRoom.vue';
 
 const team = computed(() => state.team);
 const sprint = computed(() => state.game?.sprint ?? 1);
 const phase = computed(() => state.game?.phase ?? 'lobby');
+const subRole = computed(() => state.you?.subRole || 'solo');
+const roleLabel = computed(() => ({
+  direction: 'Direction', delivery: 'Delivery', liaison: 'Passerelle', solo: '',
+}[subRole.value] || ''));
 
 const showEnd = ref(false);
 watch(
@@ -41,7 +48,7 @@ const endHistory = computed(
 
 <template>
   <div v-if="team">
-    <TopBar :subtitle="`Équipe ${team.name}`">
+    <TopBar :subtitle="roleLabel ? `Équipe ${team.name} · ${roleLabel}` : `Équipe ${team.name}`">
       <button class="btn btn-secondary" @click="clearSession()">Quitter</button>
     </TopBar>
 
@@ -53,19 +60,25 @@ const endHistory = computed(
       <AppIcon name="warn" /> {{ state.error }} <span class="dismiss">(cliquer pour masquer)</span>
     </div>
 
-    <IncomingSection :team="team" :sprint="sprint" />
+    <DirectionRoom v-if="subRole === 'direction'" :team="team" :sprint="sprint" />
+    <DeliveryRoom v-else-if="subRole === 'delivery'" :team="team" :sprint="sprint" />
+    <LiaisonRoom v-else-if="subRole === 'liaison'" :team="team" :sprint="sprint" />
 
-    <main class="dashboard-grid">
-      <KanbanBoard :team="team" :sprint="sprint" />
+    <template v-else>
+      <IncomingSection :team="team" :sprint="sprint" />
 
-      <aside>
-        <StaffPool :team="team" />
-        <HirePanel :team="team" />
-        <IncidentSlot :card="team.drawnCard" />
-        <EventLog :log="team.log" />
-        <MetricsPanel :team="team" />
-      </aside>
-    </main>
+      <main class="dashboard-grid">
+        <KanbanBoard :team="team" :sprint="sprint" />
+
+        <aside>
+          <StaffPool :team="team" />
+          <HirePanel :team="team" />
+          <IncidentSlot :card="team.drawnCard" />
+          <EventLog :log="team.log" />
+          <MetricsPanel :team="team" />
+        </aside>
+      </main>
+    </template>
 
     <EndModal
       v-if="showEnd"

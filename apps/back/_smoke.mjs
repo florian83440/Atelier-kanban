@@ -116,7 +116,7 @@ try {
   const staffBefore = s1.team.staff.length;
   p1.send({ type: 'hireDev', spec: 'full' });
   s1 = await p1.waitFor('snapshot', (m) => m.team.staff.length === staffBefore + 1);
-  assert(s1.team.totalHiringCost === 35000, 'recrutement full = 35 000 €');
+  assert(s1.team.totalHiringCost === 17500, 'recrutement full = 17 500 €');
 
   // --- Joueur 1 accepte un projet + affecte un PO
   const proj = s1.team.incomingProjects[0];
@@ -160,6 +160,59 @@ try {
   host.send({ type: 'adjustTimer', seconds: -30 });
   hs = await host.waitFor('snapshot', (m) => m.game.sprintEndsAt <= endsMid - 29000);
   assert(endsMid - hs.game.sprintEndsAt >= 29000, '-30 s retire du minuteur');
+
+  // --- Sous-roles : Direction / Delivery sur une meme equipe, infos cloisonnees
+  const dir = client('dir'); await dir.open();
+  dir.send({ type: 'joinGame', code, name: 'Dir', teamName: 'Ops', subRole: 'direction' });
+  await dir.waitFor('joined');
+  let ds = await dir.waitFor('snapshot', (m) => m.team && m.you.subRole === 'direction');
+  assert(ds.team.staff.length === 0, 'Direction : aucun effectif dans le snapshot');
+  assert(ds.team.incomingProjects.length >= 1, 'Direction : voit la file d\'appels d\'offres');
+  assert(typeof ds.team.incomingProjects[0].value === 'number', 'Direction : voit les montants');
+
+  const del = client('del'); await del.open();
+  del.send({ type: 'joinGame', code, name: 'Del', teamName: 'Ops', subRole: 'delivery' });
+  await del.waitFor('joined');
+  let es = await del.waitFor('snapshot', (m) => m.team && m.you.subRole === 'delivery');
+  assert(es.team.staff.length === 12, 'Delivery : voit l\'effectif complet');
+  assert(es.team.incomingProjects.length === 0, 'Delivery : ne voit pas la file d\'appels d\'offres');
+
+  // Direction signe un contrat negocie (delai x perimetre)
+  const offer = ds.team.incomingProjects[0];
+  dir.send({ type: 'acceptProject', projectId: offer.id, terms: { delai: 'confort', perimetre: 'costaud' } });
+  ds = await dir.waitFor('snapshot', (m) => m.team.activeProjects.some((p) => p.id === offer.id));
+  const signed = ds.team.activeProjects.find((p) => p.id === offer.id);
+  assert(signed.terms && signed.terms.delai === 'confort', 'contrat : termes negocies enregistres');
+  assert(signed.progress === undefined && signed.assigned === undefined, 'Direction : suivi macro (pas d\'avancement fin ni d\'effectif)');
+
+  // Delivery voit le projet signe SANS montant, et peut affecter un membre
+  es = await del.waitFor('snapshot', (m) => m.team.activeProjects.some((p) => p.id === offer.id));
+  const delProj = es.team.activeProjects.find((p) => p.id === offer.id);
+  assert(delProj.value === undefined && delProj.earned === undefined, 'Delivery : aucun montant sur les projets');
+  const anAnalyst = es.team.staff.find((s) => s.role === 'analyst');
+  del.send({ type: 'assignStaff', staffId: anAnalyst.id, projectId: offer.id });
+  es = await del.waitFor('snapshot', (m) => {
+    const p = m.team.activeProjects.find((x) => x.id === offer.id);
+    return p && p.assigned.includes(anAnalyst.id);
+  });
+  assert(es.team.activeProjects.find((p) => p.id === offer.id).assigned.includes(anAnalyst.id), 'Delivery : affectation OK');
+
+  // Delivery ne peut pas accepter de projet (mauvaise salle)
+  del.send({ type: 'acceptProject', projectId: 'x' });
+  const de = await del.waitFor('error');
+  assert(/autre salle/i.test(de.message), 'Delivery : acceptProject refuse (mauvaise salle)');
+
+  // Direction renegocie l'echeance ; ne peut pas affecter de membre
+  dir.send({ type: 'renegotiateDeadline', projectId: offer.id });
+  ds = await dir.waitFor('snapshot', (m) => {
+    const p = m.team.activeProjects.find((x) => x.id === offer.id);
+    return p && p.renegotiations === 1;
+  });
+  assert(ds.team.activeProjects.find((p) => p.id === offer.id).renegotiations === 1, 'Direction : renegociation appliquee');
+  dir.send({ type: 'assignStaff', staffId: 'x', projectId: 'y' });
+  const dbad = await dir.waitFor('error');
+  assert(/autre salle/i.test(dbad.message), 'Direction : assignStaff refuse (mauvaise salle)');
+  console.log('  sous-roles Direction/Delivery : cloisonnement + gating OK');
 
   // --- Reset
   host.send({ type: 'resetGame' });

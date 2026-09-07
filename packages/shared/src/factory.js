@@ -62,7 +62,10 @@ export function createIncomingProject(team, rng = Math.random, sprint = 1) {
     name: `${tmpl.name} #${team.projectCounter}`,
     type: tmpl.type,
     value: tmpl.value,
+    baseValue: tmpl.value, // valeur catalogue avant negociation
     earned: 0, // CA deja encaisse sur ce projet (parts d'etapes + livraison)
+    terms: null, // { delai, perimetre } fixes a l'acceptation par la Direction
+    renegotiations: 0,
     stage: 'incoming',
     dur: { ...tmpl.dur },
     req: { ...tmpl.req },

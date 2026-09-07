@@ -63,7 +63,7 @@ export function initNet() {
   onMsg('open', () => {
     const s = loadSession();
     if (s?.code && s?.token) {
-      send({ type: 'joinGame', code: s.code, token: s.token, name: s.name, teamName: s.teamName, asHost: s.asHost });
+      send({ type: 'joinGame', code: s.code, token: s.token, name: s.name, teamName: s.teamName, subRole: s.subRole, asHost: s.asHost });
     }
   });
 
@@ -107,13 +107,15 @@ export function createGame(name) {
   state.pendingName = name;
   send({ type: 'createGame', name });
 }
-export function joinGame({ name, code, teamName }) {
+export function joinGame({ name, code, teamName, subRole }) {
   const up = String(code || '').trim().toUpperCase();
-  saveSession({ name, teamName, code: up, asHost: false });
-  send({ type: 'joinGame', code: up, name, teamName });
+  const role = ['solo', 'direction', 'delivery', 'liaison'].includes(subRole) ? subRole : 'solo';
+  saveSession({ name, teamName, code: up, subRole: role, asHost: false });
+  send({ type: 'joinGame', code: up, name, teamName, subRole: role });
 }
-export function acceptProject(projectId) { send({ type: 'acceptProject', projectId }); }
+export function acceptProject(projectId, terms = null) { send({ type: 'acceptProject', projectId, terms }); }
 export function rejectProject(projectId) { send({ type: 'rejectProject', projectId }); }
+export function renegotiateDeadline(projectId) { send({ type: 'renegotiateDeadline', projectId }); }
 export function hireDev(spec) { send({ type: 'hireDev', spec }); }
 export function assignStaff(staffId, projectId) { send({ type: 'assignStaff', staffId, projectId }); }
 export function unassignStaff(staffId) { send({ type: 'unassignStaff', staffId }); }

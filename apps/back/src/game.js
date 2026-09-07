@@ -5,6 +5,7 @@
 import {
   acceptProject,
   rejectProject,
+  renegotiateDeadline,
   hireDev,
   assignStaff,
   unassignStaff,
@@ -13,6 +14,7 @@ import {
   adjustSprintTime,
   resetGame,
   netValue,
+  getAssignedDetails,
 } from '@kanban-it/shared';
 import {
   createRoom,
@@ -23,6 +25,7 @@ import {
   addPlayer,
   findPlayerByToken,
   movePlayerToTeam,
+  normalizeSubRole,
 } from './rooms.js';
 
 const OPEN = 1;
@@ -54,6 +57,79 @@ function teamSummary(team) {
   };
 }
 
+// ------------------------------------------------------------ lentilles de role
+// Les deux salles d'une meme equipe ne voient pas les memes informations.
+//  - Direction : file d'appels d'offres + montants + suivi MACRO (pas d'effectif,
+//    pas d'avancement fin, pas d'incident RH).
+//  - Delivery  : board complet + effectif + incidents, mais AUCUN montant.
+
+const EURO_RE = /[-+]?\s?\d[\d\s.  ]*\s*(?:k€|€)/g;
+function maskAmounts(log) {
+  return log.map((e) => ({ ...e, msg: e.msg.replace(EURO_RE, 'montant masqué') }));
+}
+
+const RH_RE = /(bloqué|indisponible|figé|FIGÉE|de retour|au complet|INCIDENT AUTOMATIQUE|MALUS|absent)/i;
+function withoutRH(log) {
+  return log.filter((e) => !RH_RE.test(e.msg));
+}
+
+// Vue Delivery : on retire les montants partout (valeur, encaissé, totaux, file).
+function deliveryLens(team) {
+  const stripProject = (p) => {
+    const { value, baseValue, earned, ...rest } = p;
+    return rest;
+  };
+  return {
+    ...team,
+    incomingProjects: [], // la file appartient a la Direction
+    activeProjects: team.activeProjects.map(stripProject),
+    totalDeliveredValue: null,
+    totalPenalties: null,
+    totalHiringCost: null,
+    history: { labels: [], revenue: [], penalties: [], spending: [], staffUsage: team.history.staffUsage.slice() },
+    log: maskAmounts(team.log),
+  };
+}
+
+// Vue Direction : suivi macro (stade + drapeaux + echeance + montants), pas
+// d'effectif ni d'avancement fin, pas d'incident RH.
+function directionLens(team, sprint) {
+  const macro = (p) => ({
+    id: p.id,
+    name: p.name,
+    type: p.type,
+    stage: p.stage,
+    value: p.value,
+    baseValue: p.baseValue,
+    earned: p.earned,
+    terms: p.terms,
+    renegotiations: p.renegotiations || 0,
+    margin: p.margin,
+    totalTheoDur: p.totalTheoDur,
+    acceptedSprint: p.acceptedSprint,
+    maxSprintDeadline: p.maxSprintDeadline,
+    hasMaintenanceBug: !!p.hasMaintenanceBug,
+    overdue: p.stage !== 'done' && sprint > p.maxSprintDeadline,
+    frozen: p.stage !== 'done' && getAssignedDetails(team, p).hasDisabledStaff,
+    staffedCount: p.assigned.length,
+  });
+  return {
+    ...team,
+    staff: [],
+    activeMalus: [],
+    drawnCard: null,
+    activeProjects: team.activeProjects.map(macro),
+    log: withoutRH(team.log),
+  };
+}
+
+function lensTeam(team, role, sprint) {
+  if (!team) return null;
+  if (role === 'delivery') return deliveryLens(team);
+  if (role === 'direction') return directionLens(team, sprint);
+  return team; // solo, liaison : vue complete
+}
+
 function buildSnapshot(room, player) {
   const g = room.game;
   const meta = {
@@ -65,17 +141,22 @@ function buildSnapshot(room, player) {
     sprintEndsAt: g.sprintEndsAt,
     serverNow: Date.now(),
   };
-  const teamsSummary = Object.values(g.teams).map(teamSummary);
+  const role = player.isHost ? 'host' : player.subRole || 'solo';
+  const fullSummary = Object.values(g.teams).map(teamSummary);
+  const teamsSummary = role === 'delivery'
+    ? fullSummary.map((s) => ({ id: s.id, name: s.name, playerCount: s.playerCount, completed: s.completed, inProgress: s.inProgress, done: s.done }))
+    : fullSummary;
   const snap = {
     type: 'snapshot',
-    you: { id: player.id, name: player.name, teamId: player.teamId, isHost: player.isHost },
+    you: { id: player.id, name: player.name, teamId: player.teamId, isHost: player.isHost, subRole: role },
     game: meta,
     teamsSummary,
   };
   if (player.isHost) {
     snap.teams = Object.values(g.teams); // etat complet de chaque equipe
   } else {
-    snap.team = player.teamId ? g.teams[player.teamId] || null : null;
+    const full = player.teamId ? g.teams[player.teamId] || null : null;
+    snap.team = lensTeam(full, role, g.sprint);
   }
   return snap;
 }
@@ -128,7 +209,8 @@ function handleJoinGame(ws, msg) {
     if (msg.teamName && !known.isHost) {
       movePlayerToTeam(room, known, resolveTeam(room, msg.teamName));
     }
-    send(ws, { type: 'joined', code: room.code, token: known.token, you: { id: known.id, isHost: known.isHost, teamId: known.teamId } });
+    if (msg.subRole && !known.isHost) known.subRole = normalizeSubRole(msg.subRole);
+    send(ws, { type: 'joined', code: room.code, token: known.token, you: { id: known.id, isHost: known.isHost, teamId: known.teamId, subRole: known.subRole } });
     broadcastRoom(room);
     return;
   }
@@ -143,16 +225,24 @@ function handleJoinGame(ws, msg) {
 
   const teamId = resolveTeam(room, msg.teamName);
   if (!teamId) return err(ws, "Nom d'équipe requis.");
-  const player = addPlayer(room, { name: msg.name, teamId, isHost: false });
+  const player = addPlayer(room, { name: msg.name, teamId, isHost: false, subRole: msg.subRole });
   attach(ws, room, player);
-  send(ws, { type: 'joined', code: room.code, token: player.token, you: { id: player.id, isHost: false, teamId } });
+  send(ws, { type: 'joined', code: room.code, token: player.token, you: { id: player.id, isHost: false, teamId, subRole: player.subRole } });
   broadcastRoom(room);
 }
 
 // ---------------------------------------------------------------- intents / controle
 
-const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'hireDev', 'assignStaff', 'unassignStaff']);
+const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireDev', 'assignStaff', 'unassignStaff']);
 const HOST_CONTROLS = new Set(['startGame', 'validateSprint', 'adjustTimer', 'resetGame']);
+
+// Qui a le droit de faire quoi selon le sous-role d'equipe.
+const ROLE_INTENTS = {
+  solo: PLAYER_INTENTS,
+  direction: new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireDev']),
+  delivery: new Set(['assignStaff', 'unassignStaff']),
+  liaison: new Set(), // passerelle : lecture seule
+};
 
 const INTENT_ERRORS = {
   wip: 'Colonne Analyse pleine (max 4) — impossible d\'accepter une nouvelle demande.',
@@ -160,6 +250,9 @@ const INTENT_ERRORS = {
   blocked: 'Ce membre est indisponible.',
   'bad-spec': 'Spécialité de dev inconnue.',
   'not-running': 'La partie n\'a pas encore démarré.',
+  'wrong-room': 'Cette action est gérée par l\'autre salle de votre équipe.',
+  'too-late': 'Projet déjà livré — renégociation impossible.',
+  'reneg-max': 'Ce contrat a déjà été renégocié au maximum.',
 };
 
 function ctx(ws) {
@@ -178,9 +271,13 @@ function handlePlayerIntent(ws, msg) {
   const team = player.teamId ? room.game.teams[player.teamId] : null;
   if (!team) return err(ws, "Vous n'êtes rattaché à aucune équipe.");
 
+  const allowed = ROLE_INTENTS[player.subRole] || ROLE_INTENTS.solo;
+  if (!allowed.has(msg.type)) return err(ws, INTENT_ERRORS['wrong-room']);
+
   let res = { ok: true };
-  if (msg.type === 'acceptProject') res = acceptProject(team, msg.projectId, room.game.sprint);
+  if (msg.type === 'acceptProject') res = acceptProject(team, msg.projectId, room.game.sprint, msg.terms || null);
   else if (msg.type === 'rejectProject') res = rejectProject(team, msg.projectId, room.game.sprint);
+  else if (msg.type === 'renegotiateDeadline') res = renegotiateDeadline(team, msg.projectId, room.game.sprint);
   else if (msg.type === 'hireDev') {
     res = room.game.phase === 'running'
       ? hireDev(team, msg.spec, room.game.sprint)

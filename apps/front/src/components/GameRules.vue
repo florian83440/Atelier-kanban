@@ -6,6 +6,8 @@ import {
   MAX_INCOMING,
   PENALTY,
   MAINTENANCE_BUG_CHANCE,
+  MAINTENANCE_BUG_CAP,
+  MAINTENANCE_BUG_PENALTY_RATE,
   DEFAULT_SPRINT_TIME,
   TIMER_STEP,
   STAFF_ROSTER,
@@ -128,8 +130,41 @@ const bugPct = Math.round(MAINTENANCE_BUG_CHANCE * 100);
       <section class="rules-card">
         <h3><AppIcon name="bug" /> Bugs en production</h3>
         <p>
-          Un projet livré peut tomber en panne (~{{ bugPct }} % par sprint) : il faut
-          <strong>1 dev</strong> pour corriger, sinon <strong>−{{ euro(PENALTY) }}</strong>.
+          <strong>Au plus 1 nouveau bug par sprint</strong> (~{{ bugPct }} % de chance),
+          <strong>{{ MAINTENANCE_BUG_CAP }} actifs</strong> max — quel que soit le nombre
+          de projets livrés.
+        </p>
+        <p class="muted">
+          Chaque bug demande <strong>1 dev</strong> le temps d'un sprint pour être
+          corrigé. Sinon, pénalité par sprint <strong>proportionnelle au budget du
+          projet</strong> ({{ Math.round(MAINTENANCE_BUG_PENALTY_RATE * 100) }} %, min
+          {{ euro(PENALTY) }}) — un gros projet en panne coûte très cher.
+        </p>
+      </section>
+
+      <section class="rules-card">
+        <h3><AppIcon name="users" /> Deux salles par équipe</h3>
+        <p>
+          Une équipe peut se scinder : la <strong>Direction</strong> négocie les contrats
+          et tient le budget, la <strong>Delivery</strong> pilote les équipes de dev. Une
+          <strong>passerelle</strong> relaie l'info entre les deux.
+        </p>
+        <p class="muted">
+          Chaque salle ne voit qu'une partie du jeu (montants d'un côté, avancement et
+          effectif de l'autre) : il faut se parler. Un joueur seul choisit « je gère tout ».
+        </p>
+      </section>
+
+      <section class="rules-card">
+        <h3><AppIcon name="arrowRight" /> Négocier un contrat</h3>
+        <p>
+          À l'acceptation, la Direction règle deux curseurs : <strong>délai</strong>
+          (Express / Standard / Confort) et <strong>périmètre</strong> (Léger / Standard /
+          Costaud). Chaque cran échange de la valeur contre du délai ou des ressources.
+        </p>
+        <p class="muted">
+          Un contrat signé peut être <strong>renégocié</strong> en cours de route :
+          +1 sprint d'échéance contre −10 % de valeur, 2 fois au maximum.
         </p>
       </section>
 

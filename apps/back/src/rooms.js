@@ -57,13 +57,22 @@ export function resolveTeam(room, teamName) {
   return id;
 }
 
-export function addPlayer(room, { name, teamId, isHost }) {
+// Sous-roles d'equipe : la salle "Direction" negocie les contrats et tient le
+// budget, la salle "Delivery" pilote les equipes de dev, la "Passerelle" relaie
+// l'info entre les deux (lecture seule), "Solo" gere tout (equipe a un joueur).
+const SUB_ROLES = new Set(['solo', 'direction', 'delivery', 'liaison']);
+export function normalizeSubRole(v) {
+  return SUB_ROLES.has(v) ? v : 'solo';
+}
+
+export function addPlayer(room, { name, teamId, isHost, subRole }) {
   const id = isHost ? room.game.hostId : `p_${randomUUID().slice(0, 8)}`;
   const player = {
     id,
     name: String(name || '').trim() || (isHost ? 'Hôte' : 'Joueur'),
     teamId: teamId || null,
     isHost: !!isHost,
+    subRole: isHost ? 'host' : normalizeSubRole(subRole),
     token: randomUUID(),
     ws: null,
     connected: false,

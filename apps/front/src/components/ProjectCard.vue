@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 import { typeLabel, WIP_LIMITS } from '@kanban-it/shared';
 import { state, acceptProject, rejectProject, assignPicked, unassignStaff, malusLeft } from '../net/useGame.js';
 import StaffToken from './StaffToken.vue';
@@ -11,6 +11,10 @@ const props = defineProps({
   sprint: { type: Number, required: true },
   mode: { type: String, default: 'active' }, // 'incoming' | 'active'
 });
+
+// Fournis par la salle Delivery / Passerelle : masquer les montants, board en lecture seule.
+const hideValue = inject('hideValue', false);
+const readOnly = inject('readOnly', false);
 
 const assignedMembers = computed(() =>
   props.project.assigned
@@ -59,13 +63,14 @@ const pct = computed(() =>
 const canPlace = computed(() => !!state.pickStaffId);
 
 function onZoneClick(ev) {
+  if (readOnly) return;
   // Un clic sur un pion deja affecte = retrait (gere par onRemove) : ne pas ré-affecter.
   if (ev.target.closest?.('.token')) return;
   if (state.pickStaffId) assignPicked(props.project.id);
 }
 
 function onRemove(member) {
-  if (member.disabled) return;
+  if (readOnly || member.disabled) return;
   unassignStaff(member.id);
 }
 
@@ -79,7 +84,7 @@ function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1);
   <div v-if="mode === 'incoming'" class="project-card">
     <div class="project-header">
       <span>{{ project.name }}</span>
-      <span class="project-value">{{ fmt(project.value) }} €</span>
+      <span v-if="!hideValue" class="project-value">{{ fmt(project.value) }} €</span>
     </div>
     <div class="project-info">
       Type : <strong>{{ typeLabel(project.type) }}</strong><br />
@@ -91,7 +96,7 @@ function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1);
       <AppIcon name="qa" />{{ project.req.qa }}
     </div>
     <div class="deadline-tag"><AppIcon name="clock" /> Durée max : {{ project.totalTheoDur + project.margin }} sprints</div>
-    <div class="incoming-actions">
+    <div v-if="!readOnly" class="incoming-actions">
       <button
         class="btn btn-primary card-accept-btn"
         :disabled="analyseFull"
@@ -124,7 +129,7 @@ function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1);
   >
     <div class="project-header">
       <span>{{ project.name }}</span>
-      <span class="project-value">
+      <span v-if="!hideValue" class="project-value">
         {{ fmt(project.value) }} €<template v-if="project.earned > 0 && project.stage !== 'done'">
           <span class="project-earned">encaissé {{ fmt(project.earned) }}</span></template>
       </span>

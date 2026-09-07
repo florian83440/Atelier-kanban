@@ -10,14 +10,23 @@ const form = reactive({
   name: '',
   code: '',
   teamName: '',
+  subRole: 'solo',
 });
+
+// Une equipe peut se scinder en deux salles qui ne voient pas les memes infos.
+const ROLES = [
+  { key: 'solo', title: 'Je gère toute l\'équipe', hint: 'Board complet + budget. À choisir si l\'équipe n\'a qu\'un joueur.' },
+  { key: 'direction', title: 'Direction', hint: 'Négocie les contrats, tient le budget. Ne voit pas l\'avancement détaillé ni l\'effectif.' },
+  { key: 'delivery', title: 'Delivery', hint: 'Pilote les équipes de dev. Ne voit aucun montant.' },
+  { key: 'liaison', title: 'Passerelle', hint: 'Relaie l\'info entre les deux salles. Lecture seule.' },
+];
 
 function submit() {
   if (tab.value === 'host') {
     createGame(form.name || 'Hôte');
   } else {
     if (!form.code.trim() || !form.teamName.trim()) return;
-    joinGame({ name: form.name || 'Joueur', code: form.code, teamName: form.teamName });
+    joinGame({ name: form.name || 'Joueur', code: form.code, teamName: form.teamName, subRole: form.subRole });
   }
 }
 </script>
@@ -46,6 +55,21 @@ function submit() {
         <div class="field">
           <label>Nom de l'équipe</label>
           <input v-model="form.teamName" placeholder="Équipe Rouge" maxlength="24" />
+        </div>
+        <div class="field">
+          <label>Votre rôle dans l'équipe</label>
+          <div class="role-pick">
+            <label
+              v-for="r in ROLES"
+              :key="r.key"
+              class="role-opt"
+              :class="{ active: form.subRole === r.key }"
+            >
+              <input type="radio" name="subrole" :value="r.key" v-model="form.subRole" />
+              <span class="role-opt-title">{{ r.title }}</span>
+              <span class="role-opt-hint">{{ r.hint }}</span>
+            </label>
+          </div>
         </div>
       </template>
 

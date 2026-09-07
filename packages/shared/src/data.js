@@ -35,9 +35,9 @@ export const PROJECT_TEMPLATES = [
   { name: 'Refonte e-Com', tier: 'std', type: 'full', value: 35000, dur: { analyse: 2, dev: 3, test: 2 }, req: { analyst: 1, dev: 3, qa: 2 }, margin: 3 },
   { name: 'App IoT', tier: 'std', type: 'back', value: 40000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
   // --- gros budgets (fin de partie) ---
-  { name: 'Plateforme SaaS', tier: 'big', minSprint: 8, type: 'full', value: 55000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
-  { name: 'Migration Legacy', tier: 'big', minSprint: 8, type: 'back', value: 60000, dur: { analyse: 2, dev: 4, test: 3 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
-  { name: 'Refonte Groupe', tier: 'big', minSprint: 12, type: 'full', value: 90000, dur: { analyse: 3, dev: 5, test: 3 }, req: { analyst: 2, dev: 5, qa: 2 }, margin: 4 },
+  { name: 'Plateforme SaaS', tier: 'big', minSprint: 8, type: 'full', value: 45000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  { name: 'Migration Legacy', tier: 'big', minSprint: 8, type: 'back', value: 50000, dur: { analyse: 2, dev: 4, test: 3 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 },
+  { name: 'Refonte Groupe', tier: 'big', minSprint: 12, type: 'full', value: 72000, dur: { analyse: 3, dev: 5, test: 3 }, req: { analyst: 2, dev: 5, qa: 2 }, margin: 4 },
 ];
 
 // Incidents RH. action est un descripteur applique par shared/logic.applyIncident

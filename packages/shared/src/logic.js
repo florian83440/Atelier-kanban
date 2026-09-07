@@ -11,8 +11,14 @@ import {
   MALUS_DRAW_RATIO,
   LOG_CAP,
   MIN_SPRINT_TIME,
+  MAINTENANCE_BUG_CAP,
+  MAINTENANCE_BUG_PENALTY_RATE,
   HIRE_COST,
   STAGE_PAYOUT,
+  NEGOTIATION,
+  RENEGOTIATE_MARGIN_GAIN,
+  RENEGOTIATE_VALUE_MULT,
+  RENEGOTIATE_MAX,
 } from './constants.js';
 import { MALUS_CARDS, BONUS_CARDS } from './data.js';
 import { createIncomingProject, createTeamState } from './factory.js';
@@ -94,6 +100,12 @@ function effectiveDevs(team, project) {
 
 const PROGRESS_EPS = 1e-9;
 
+// Pénalité (par sprint) d'un bug de maintenance non résolu : proportionnelle au
+// budget de base du projet, jamais moins que PENALTY.
+export function bugPenalty(project) {
+  return Math.max(PENALTY, Math.round(project.value * MAINTENANCE_BUG_PENALTY_RATE));
+}
+
 // Encaisse la part de CA associee au franchissement d'une etape. Pour la
 // livraison ('test'), on solde le reste pour que le total encaisse == p.value.
 function payStage(team, project, stageKey, sprint) {
@@ -105,9 +117,37 @@ function payStage(team, project, stageKey, sprint) {
   return amount;
 }
 
+// ---------------------------------------------------------------- negociation
+
+const round100 = (n) => Math.round(n / 100) * 100;
+
+// Applique les curseurs de negociation a une demande SANS muter l'objet.
+// `base` = un template ou un projet en file (besoin de .value, .margin, .req).
+// `terms` = { delai, perimetre } (cles de NEGOTIATION ; valeurs inconnues -> 'standard').
+// Retourne { delai, perimetre, value, margin, req, baseValue }.
+export function negotiateTerms(base, terms = {}) {
+  const dKey = NEGOTIATION.delai[terms.delai] ? terms.delai : 'standard';
+  const pKey = NEGOTIATION.perimetre[terms.perimetre] ? terms.perimetre : 'standard';
+  const d = NEGOTIATION.delai[dKey];
+  const p = NEGOTIATION.perimetre[pKey];
+  return {
+    delai: dKey,
+    perimetre: pKey,
+    baseValue: base.value,
+    value: Math.max(1000, round100(base.value * d.valueMult * p.valueMult)),
+    margin: Math.max(0, base.margin + d.marginDelta),
+    req: {
+      analyst: base.req.analyst,
+      dev: Math.max(1, base.req.dev + p.devDelta),
+      qa: Math.max(1, base.req.qa + p.qaDelta),
+    },
+  };
+}
+
 // ---------------------------------------------------------------- intents joueur
 
-export function acceptProject(team, projId, sprint) {
+// `terms` (optionnel) = { delai, perimetre } issus de la negociation Direction.
+export function acceptProject(team, projId, sprint, terms = null) {
   const analyseCount = team.activeProjects.filter((p) => p.stage === 'analyse').length;
   if (analyseCount >= WIP_LIMITS.analyse) {
     logEvent(team, `WIP BLOCAGE : la colonne Analyse est pleine (${WIP_LIMITS.analyse}).`, 'malus', sprint);
@@ -117,6 +157,13 @@ export function acceptProject(team, projId, sprint) {
   if (idx === -1) return { ok: false, reason: 'not-found' };
 
   const proj = team.incomingProjects.splice(idx, 1)[0];
+  const n = negotiateTerms(proj, terms || {});
+  proj.baseValue = proj.value;
+  proj.value = n.value;
+  proj.margin = n.margin;
+  proj.req = n.req;
+  proj.terms = { delai: n.delai, perimetre: n.perimetre };
+  proj.renegotiations = 0;
   proj.stage = 'analyse';
   proj.progress = 0;
   proj.assigned = [];
@@ -124,7 +171,33 @@ export function acceptProject(team, projId, sprint) {
   proj.maxSprintDeadline = sprint + proj.totalTheoDur + proj.margin;
   team.activeProjects.push(proj);
 
-  logEvent(team, `PROJET ACCEPTÉ : ${proj.name} placé en ANALYSE (échéance Sprint ${proj.maxSprintDeadline}).`, 'system', sprint);
+  const negotiated = n.delai !== 'standard' || n.perimetre !== 'standard';
+  const suffix = negotiated
+    ? ` — contrat ${NEGOTIATION.delai[n.delai].label} / ${NEGOTIATION.perimetre[n.perimetre].label} (${proj.value.toLocaleString('fr-FR')} €)`
+    : '';
+  logEvent(team, `PROJET ACCEPTÉ : ${proj.name} placé en ANALYSE (échéance Sprint ${proj.maxSprintDeadline})${suffix}.`, 'system', sprint);
+  return { ok: true };
+}
+
+// Renegocie l'echeance d'un projet deja signe : +RENEGOTIATE_MARGIN_GAIN sprint
+// d'echeance contre -RENEGOTIATE_VALUE_MULT de valeur, RENEGOTIATE_MAX fois max.
+export function renegotiateDeadline(team, projId, sprint) {
+  const p = team.activeProjects.find((x) => x.id === projId);
+  if (!p) return { ok: false, reason: 'not-found' };
+  if (p.stage === 'done') return { ok: false, reason: 'too-late' };
+  if ((p.renegotiations || 0) >= RENEGOTIATE_MAX) return { ok: false, reason: 'reneg-max' };
+
+  p.renegotiations = (p.renegotiations || 0) + 1;
+  p.margin += RENEGOTIATE_MARGIN_GAIN;
+  p.maxSprintDeadline += RENEGOTIATE_MARGIN_GAIN;
+  const before = p.value;
+  p.value = Math.max(p.earned || 0, round100(p.value * RENEGOTIATE_VALUE_MULT));
+  logEvent(
+    team,
+    `RENÉGOCIATION : ${p.name} — +${RENEGOTIATE_MARGIN_GAIN} sprint d'échéance (Sprint ${p.maxSprintDeadline}), valeur ${before.toLocaleString('fr-FR')} → ${p.value.toLocaleString('fr-FR')} €.`,
+    'system',
+    sprint,
+  );
   return { ok: true };
 }
 
@@ -342,20 +415,30 @@ export function processSprint(team, sprint, rng = Math.random) {
           freeAssigned(team, p);
         }
       }
-    } else if (p.stage === 'done') {
-      if (p.hasMaintenanceBug) {
-        if (details.dev >= 1) {
-          p.hasMaintenanceBug = false;
-          logEvent(team, `MAINTENANCE : bug corrigé sur ${p.name} par un Dev !`, 'bonus', sprint);
-          freeAssigned(team, p);
-        } else {
-          team.totalPenalties += PENALTY;
-          logEvent(team, `MAINTENANCE : bug critique non résolu sur ${p.name} (-${PENALTY.toLocaleString('fr-FR')} €) !`, 'malus', sprint);
-        }
-      } else if (rng() < MAINTENANCE_BUG_CHANCE) {
-        p.hasMaintenanceBug = true;
-        logEvent(team, `ALERTE PROD : incident technique détecté sur ${p.name} ! Dev requis.`, 'malus', sprint);
+    } else if (p.stage === 'done' && p.hasMaintenanceBug) {
+      if (details.dev >= 1) {
+        p.hasMaintenanceBug = false;
+        logEvent(team, `MAINTENANCE : bug corrigé sur ${p.name} par un Dev !`, 'bonus', sprint);
+        freeAssigned(team, p);
+      } else {
+        const cost = bugPenalty(p);
+        team.totalPenalties += cost;
+        logEvent(team, `MAINTENANCE : bug critique non résolu sur ${p.name} (-${cost.toLocaleString('fr-FR')} €) !`, 'malus', sprint);
       }
+    }
+  }
+
+  // Maintenance : UN SEUL tirage par sprint pour toute l'équipe (pas par projet),
+  // plafonné à MAINTENANCE_BUG_CAP bugs actifs — évite qu'une équipe qui livre
+  // beaucoup se retrouve noyée sous les incidents.
+  {
+    const done = team.activeProjects.filter((x) => x.stage === 'done');
+    const activeBugs = done.filter((x) => x.hasMaintenanceBug).length;
+    const eligible = done.filter((x) => !x.hasMaintenanceBug);
+    if (eligible.length > 0 && activeBugs < MAINTENANCE_BUG_CAP && rng() < MAINTENANCE_BUG_CHANCE) {
+      const target = eligible[Math.floor(rng() * eligible.length)];
+      target.hasMaintenanceBug = true;
+      logEvent(team, `ALERTE PROD : incident technique sur ${target.name} ! Dev requis.`, 'malus', sprint);
     }
   }
 

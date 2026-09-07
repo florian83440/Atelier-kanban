@@ -1,9 +1,14 @@
 import {
   createGameState, createTeamState, startGame, advanceSprint,
   acceptProject, rejectProject, assignStaff, unassignStaff, disableRole,
-  devEffectiveness, drawIncident, createIncomingProject, hireDev, netValue,
+  devEffectiveness, drawIncident, createIncomingProject, hireDev, netValue, bugPenalty,
+  negotiateTerms, renegotiateDeadline,
   TOTAL_SPRINTS, PROJECT_TEMPLATES, HIRE_COST, STAGE_PAYOUT,
+  MAINTENANCE_BUG_CAP, MAINTENANCE_BUG_PENALTY_RATE, PENALTY,
+  RENEGOTIATE_MAX,
 } from './src/index.js';
+
+const round100 = (n) => Math.round(n / 100) * 100;
 
 function rng32(seed) {
   return function () {
@@ -348,6 +353,121 @@ function rng32(seed) {
   if (P().earned !== 100000) throw new Error('project.earned == value');
   if (team.totalCompletedProjects !== 1) throw new Error('1 projet livre');
   console.log('[11] CA par etapes 5/20/75, total exact : OK');
+}
+
+// ---- 12) Maintenance : 1 nouveau bug / sprint max, plafond MAINTENANCE_BUG_CAP ----
+{
+  const game = createGameState('MTN', 'h1');
+  const team = createTeamState('t1', 'Solo');
+  game.teams.t1 = team;
+  startGame(game);
+
+  // 5 projets livres, sans dev pour corriger -> les bugs s'accumulent
+  for (let i = 0; i < 5; i++) {
+    team.activeProjects.push({
+      id: `d${i}`, name: `Livré ${i}`, type: 'full', value: 10000, earned: 10000,
+      stage: 'done', dur: { analyse: 1, dev: 1, test: 1 }, req: { analyst: 1, dev: 1, qa: 1 },
+      progress: 0, hasMaintenanceBug: false, margin: 2, totalTheoDur: 3,
+      maxSprintDeadline: 99, acceptedSprint: 0, assigned: [],
+    });
+  }
+
+  const bugs = () => team.activeProjects.filter((p) => p.hasMaintenanceBug).length;
+  let prev = 0;
+  for (let s = 0; s < 12; s++) {
+    advanceSprint(game, () => 0); // rng=0 : declenche toujours le tirage maintenance
+    const now = bugs();
+    if (now - prev > 1) throw new Error(`sprint ${s} : ${now - prev} nouveaux bugs (max 1 attendu)`);
+    if (now > MAINTENANCE_BUG_CAP) throw new Error(`sprint ${s} : ${now} bugs actifs (plafond ${MAINTENANCE_BUG_CAP})`);
+    prev = now;
+  }
+  if (bugs() !== MAINTENANCE_BUG_CAP) throw new Error('apres 12 sprints non corriges : plafond atteint, obtenu ' + bugs());
+  console.log('[12] Maintenance : 1 bug/sprint max, plafond', MAINTENANCE_BUG_CAP, ': OK');
+}
+
+// ---- 13) Pénalité de bug proportionnelle au budget du projet ----
+{
+  // helper pur
+  if (bugPenalty({ value: 6000 }) !== PENALTY) throw new Error('petit projet -> plancher PENALTY');
+  if (bugPenalty({ value: 40000 }) !== Math.round(40000 * MAINTENANCE_BUG_PENALTY_RATE)) throw new Error('mid projet -> proportionnel');
+  const big = bugPenalty({ value: 72000 });
+  if (big !== Math.round(72000 * MAINTENANCE_BUG_PENALTY_RATE)) throw new Error('gros projet -> proportionnel');
+  if (big <= PENALTY) throw new Error('un gros bug doit couter plus que le plancher');
+
+  // intégration : gros projet livré, bug non corrigé -> penalites += bugPenalty
+  const game = createGameState('BUGP', 'h1');
+  const team = createTeamState('t1', 'Solo');
+  game.teams.t1 = team;
+  startGame(game);
+  team.activeProjects.push({
+    id: 'big1', name: 'Refonte Groupe #x', type: 'full', value: 72000, earned: 72000,
+    stage: 'done', dur: { analyse: 1, dev: 1, test: 1 }, req: { analyst: 1, dev: 1, qa: 1 },
+    progress: 0, hasMaintenanceBug: true, margin: 4, totalTheoDur: 11,
+    maxSprintDeadline: 99, acceptedSprint: 0, assigned: [], // aucun dev -> non corrige
+  });
+  const penBefore = team.totalPenalties;
+  advanceSprint(game, () => 0.99); // 0.99 : pas de nouveau tirage maintenance
+  if (team.totalPenalties - penBefore !== big) {
+    throw new Error(`penalite attendue ${big}, obtenu ${team.totalPenalties - penBefore}`);
+  }
+  console.log('[13] Pénalité de bug proportionnelle au budget (', big, '€ pour 72k) : OK');
+}
+
+// ---- 14) Négociation de contrat : curseurs délai × périmètre + renégociation ----
+{
+  const base = { value: 20000, margin: 3, req: { analyst: 1, dev: 3, qa: 2 } };
+
+  const std = negotiateTerms(base, {});
+  if (std.value !== 20000 || std.margin !== 3) throw new Error('standard = contrat inchangé');
+  if (std.req.dev !== 3 || std.req.qa !== 2 || std.req.analyst !== 1) throw new Error('standard : effectif inchangé');
+
+  const ec = negotiateTerms(base, { delai: 'express', perimetre: 'costaud' });
+  if (ec.value !== round100(20000 * 1.25 * 1.4)) throw new Error('express+costaud : valeur cumulée, obtenu ' + ec.value);
+  if (ec.margin !== 1) throw new Error('express : marge -2 (3 -> 1), obtenu ' + ec.margin);
+  if (ec.req.dev !== 4 || ec.req.qa !== 3) throw new Error('costaud : dev+1 / qa+1');
+
+  const cl = negotiateTerms(base, { delai: 'confort', perimetre: 'leger' });
+  if (cl.value !== round100(20000 * 0.85 * 0.7)) throw new Error('confort+leger : valeur, obtenu ' + cl.value);
+  if (cl.margin !== 6) throw new Error('confort : marge +3 (3 -> 6), obtenu ' + cl.margin);
+  if (cl.req.dev !== 2 || cl.req.qa !== 1) throw new Error('leger : dev-1 / qa-1');
+
+  const bad = negotiateTerms(base, { delai: 'n_importe_quoi', perimetre: 'xxx' });
+  if (bad.value !== 20000) throw new Error('curseurs inconnus -> standard');
+
+  // acceptProject applique les termes négociés
+  const game = createGameState('NEG', 'h1');
+  const team = createTeamState('t1', 'Solo');
+  game.teams.t1 = team;
+  startGame(game);
+
+  const ip = team.incomingProjects[0];
+  const pid = ip.id;
+  const baseVal = ip.value;
+  const baseMargin = ip.margin;
+  const theoDur = ip.totalTheoDur;
+  const r0 = acceptProject(team, pid, game.sprint, { delai: 'confort', perimetre: 'standard' });
+  if (!r0.ok) throw new Error('acceptProject négocié doit réussir');
+  const P = () => team.activeProjects.find((p) => p.id === pid);
+  if (P().value !== round100(baseVal * 0.85)) throw new Error('valeur négociée appliquée, obtenu ' + P().value);
+  if (P().baseValue !== baseVal) throw new Error('baseValue conserve la valeur catalogue');
+  if (P().terms.delai !== 'confort') throw new Error('terms enregistrés sur le projet');
+  if (P().maxSprintDeadline !== game.sprint + theoDur + (baseMargin + 3)) {
+    throw new Error('échéance = sprint + durée + marge négociée, obtenu ' + P().maxSprintDeadline);
+  }
+
+  // renégociation : +1 sprint, -10 % de valeur, 2 fois max
+  const v1 = P().value;
+  const dl1 = P().maxSprintDeadline;
+  let r = renegotiateDeadline(team, pid, game.sprint);
+  if (!r.ok) throw new Error('1re renégociation doit réussir');
+  if (P().maxSprintDeadline !== dl1 + 1) throw new Error('renégo : +1 sprint d\'échéance');
+  if (P().value !== Math.max(P().earned, round100(v1 * 0.9))) throw new Error('renégo : -10 % de valeur, obtenu ' + P().value);
+  if (P().renegotiations !== 1) throw new Error('compteur de renégociation');
+  renegotiateDeadline(team, pid, game.sprint); // 2e
+  r = renegotiateDeadline(team, pid, game.sprint); // 3e -> refusée
+  if (r.ok || r.reason !== 'reneg-max') throw new Error('renégo plafonnée à ' + RENEGOTIATE_MAX);
+
+  console.log('[14] Négociation de contrat (délai × périmètre) + renégociation : OK');
 }
 
 console.log('SMOKE LOGIQUE OK');
