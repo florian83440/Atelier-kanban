@@ -1,0 +1,34 @@
+# Test local des images de deploiement (PAS utilise par quai — quai build
+# chaque Dockerfile individuellement). Reproduit le comportement prod :
+# front statique servi par nginx + back WebSocket, sur deux ports distincts.
+#
+#   cd deploy && docker compose up --build
+#   -> front  : http://localhost:8080  (hote : http://localhost:8080/?host)
+#   -> back   : ws://localhost:8081
+#
+# VITE_SERVER_URL est fige au build : ici on pointe le front local vers le
+# back local. En prod quai, ce sera wss://<domaine-api>.
+
+services:
+  back:
+    build:
+      context: ..
+      dockerfile: apps/back/Dockerfile
+    environment:
+      PORT: "8080"
+      # ALLOWED_ORIGINS: "http://localhost:8080"   # decommenter pour tester le filtre d'origine
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ..
+      dockerfile: apps/front/Dockerfile
+      args:
+        VITE_SERVER_URL: "ws://localhost:8081"
+    ports:
+      - "8080:80"
+    depends_on:
+      - back
+    restart: unless-stopped

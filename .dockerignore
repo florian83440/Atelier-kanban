@@ -1,0 +1,16 @@
+# Le contexte de build quai = racine du repo (voir docs/deploy-quai.md).
+# Tout est envoye au demon Docker a chaque build : on garde ca leger.
+**/node_modules
+**/dist
+**/.vite
+.git
+.gitignore
+.claude
+legacy
+docs
+deploy/docker-compose.yml
+**/_smoke.mjs
+*.md
+.env
+.env.*
+!.env.example

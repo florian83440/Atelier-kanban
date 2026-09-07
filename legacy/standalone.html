@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban IT - Simulation de Flux</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-main: #ffffff;
+            --bg-card: #ffffff;
+            --bg-column: #ffffff;
+            --bg-dropzone: #f4f6f8;
+            --border-color: #9aa4b2;
+            --border-light: #c7cdd6;
+            --text-main: #1f2937;
+            --text-muted: #64748b;
+            --accent-blue: #0b74c4;
+            --accent-green: #0f9d63;
+            --accent-red: #d13438;
+            --accent-amber: #c47f00;
+            --accent-purple: #7c3aed;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        /* TOPBAR DISCRÈTE */
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            margin-bottom: 8px;
+        }
+
+        .topbar-brand {
+            font-size: 11pt;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .topbar-brand span {
+            color: var(--accent-blue);
+        }
+
+        .topbar-center {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .timer-badge {
+            background: var(--bg-dropzone);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            font-size: 9.5pt;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .timer-badge.warning {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0.6; } }
+
+        .sprint-badge {
+            font-size: 9.5pt;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .sprint-badge strong {
+            color: var(--text-main);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid transparent;
+            font-size: 8.5pt;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, opacity 0.15s;
+            font-family: inherit;
+        }
+
+        .btn-primary { background-color: #0284c7; color: white; }
+        .btn-primary:hover { background-color: #0369a1; }
+        .btn-secondary { background-color: #ffffff; color: var(--text-main); border-color: var(--border-color); }
+        .btn-secondary:hover { background-color: #eef1f4; }
+
+        .btn-xs {
+            padding: 2px 6px;
+            font-size: 7pt;
+            background: #ffffff;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .btn-xs:hover { background: #eef1f4; }
+
+        /* SECTION INCOMINGS */
+        .incoming-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+
+        .incoming-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 8.5pt;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .incoming-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            min-height: 70px;
+            border: 1px solid var(--border-color);
+        }
+
+        .incoming-grid > * {
+            border: 1px solid var(--border-light);
+            margin: -1px 0 0 -1px;
+        }
+
+        /* MAIN LAYOUT */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 8px;
+        }
+
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            background: var(--bg-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .kanban-column {
+            background: var(--bg-column);
+            display: flex;
+            flex-direction: column;
+            min-height: 500px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .kanban-column:last-child {
+            border-right: none;
+        }
+
+        .column-header {
+            padding: 8px 10px;
+            font-size: 8pt;
+            font-weight: 700;
+            text-align: left;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .column-header.col-analyst { border-top: 3px solid var(--accent-purple); }
+        .column-header.col-dev { border-top: 3px solid var(--accent-blue); }
+        .column-header.col-qa { border-top: 3px solid var(--accent-amber); }
+        .column-header.col-done { border-top: 3px solid var(--accent-green); }
+
+        .column-body {
+            padding: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        /* CARTE PROJET */
+        .project-card {
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            padding: 8px;
+            position: relative;
+        }
+
+        .project-card.maint-alert {
+            border: 1px solid var(--accent-red);
+            background: #fdecec;
+            animation: blink 1.5s infinite;
+        }
+
+        .project-card.late-alert {
+            border-style: dashed;
+            border-color: var(--accent-red);
+        }
+
+        .project-card.blocked-malus {
+            border: 1px solid var(--accent-red);
+            background: #fdecec;
+        }
+
+        .project-header {
+            font-weight: 600;
+            font-size: 8.5pt;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-main);
+        }
+
+        .project-info {
+            font-size: 7.5pt;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .progress-bar-bg {
+            background: #e2e6ec;
+            height: 4px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .progress-bar-fill {
+            background: var(--accent-blue);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .role-req-box {
+            background: var(--bg-dropzone);
+            border: 1px solid var(--border-light);
+            padding: 3px 6px;
+            font-size: 7pt;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+
+        .deadline-tag {
+            font-size: 7pt;
+            font-weight: 600;
+            color: var(--accent-amber);
+            background: rgba(196, 127, 0, 0.12);
+            padding: 2px 4px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+
+        .deadline-tag.overdue {
+            color: var(--accent-red);
+            background: rgba(209, 52, 56, 0.12);
+        }
+
+        .dropzone-stage {
+            background: var(--bg-dropzone);
+            border: 1px dashed var(--border-color);
+            padding: 4px;
+            min-height: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        /* PIONS MEMBRES D'ÉQUIPE */
+        .tokens-flex {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            min-height: 40px;
+            background: var(--bg-dropzone);
+            padding: 6px;
+            border: 1px dashed var(--border-color);
+        }
+
+        .token {
+            padding: 3px 6px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .token.analyst { background: #f2e7ff; border: 1px solid var(--accent-purple); color: #6b21a8; }
+        .token.dev { background: #dcecfb; border: 1px solid var(--accent-blue); color: #1e40af; }
+        .token.qa { background: #fdefcf; border: 1px solid var(--accent-amber); color: #8a5a00; }
+        .token.locked { cursor: not-allowed; opacity: 0.7; border-style: double; }
+        .token.disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); background: #fbe3e3 !important; border-color: var(--accent-red) !important; }
+
+        /* SIDEBAR */
+        .panel-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+
+        .panel-box h3 {
+            margin-top: 0;
+            font-size: 8.5pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .event-slot {
+            min-height: 60px;
+            background: var(--bg-dropzone);
+            border: 1px dashed var(--border-color);
+            padding: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-display { width: 100%; padding: 4px 6px; font-size: 7.5pt; }
+        .card-display.malus { background: #fdecec; border-left: 2px solid var(--accent-red); color: #a12b2e; }
+        .card-display.bonus { background: #e6f6ef; border-left: 2px solid var(--accent-green); color: #0a6b45; }
+
+        .event-log {
+            height: 140px;
+            overflow-y: auto;
+            font-size: 7.5pt;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry { padding: 4px 6px; background: var(--bg-dropzone); border-left: 2px solid var(--text-muted); color: var(--text-muted); }
+        .log-entry.malus { background: #fdecec; border-left-color: var(--accent-red); color: #a12b2e; }
+        .log-entry.bonus { background: #e6f6ef; border-left-color: var(--accent-green); color: #0a6b45; }
+        .log-entry.system { background: #e6f1fb; border-left-color: var(--accent-blue); color: #0b5394; }
+
+        .stats-list { list-style: none; padding: 0; margin: 0; font-size: 8pt; }
+        .stats-list li { margin-bottom: 4px; display: flex; justify-content: space-between; color: var(--text-muted); }
+        .stats-list li strong { color: var(--text-main); }
+
+        /* MODAL */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.55);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            width: 80%;
+            max-width: 750px;
+            padding: 16px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .modal-header h2 { margin: 0; font-size: 11pt; color: var(--text-main); }
+    </style>
+</head>
+<body>
+
+    <!-- TOPBAR COMPACTE -->
+    <header class="topbar">
+        <div class="topbar-brand">
+            <span>❖</span> KANBAN IT <small style="font-size: 8pt; color: var(--text-muted); font-weight: normal;">| Simulation de Flux</small>
+        </div>
+        
+        <div class="topbar-center">
+            <div class="sprint-badge">
+                SPRINT <strong id="current-tour-display">1</strong> / 20
+            </div>
+            <div class="timer-badge" id="timer-box">
+                ⏱ <span id="timer-display">01:00</span>
+                <button id="btn-reduce-timer" class="btn-xs" title="Réduire le temps suite à un audit">⚡ -30s</button>
+            </div>
+        </div>
+
+        <div class="topbar-actions">
+            <button id="btn-next-tour" class="btn btn-primary">Valider le Tour ➔</button>
+            <button id="btn-reset" class="btn btn-secondary">Réinitialiser</button>
+        </div>
+    </header>
+
+    <!-- BACKLOG ENTRÉE -->
+    <section class="incoming-section">
+        <div class="incoming-header">
+            <span>📥 Demandes Incomings (Max 4)</span>
+            <button class="btn-xs" onclick="generateIncomingProject()">+ Nouvel Appel d'Offres</button>
+        </div>
+        <div class="incoming-grid" id="incoming-container"></div>
+    </section>
+
+    <!-- BOARD KANBAN & SIDEBAR -->
+    <main class="dashboard-grid">
+        
+        <section class="kanban-board">
+            <div class="kanban-column" id="col-analyse">
+                <div class="column-header col-analyst">
+                    <span>1. ANALYSE & SPEC</span>
+                    <small>MAX 4</small>
+                </div>
+                <div class="column-body" id="zone-analyse" ondrop="dropProjectToAnalyse(event)" ondragover="allowDrop(event)"></div>
+            </div>
+
+            <div class="kanban-column" id="col-dev">
+                <div class="column-header col-dev">
+                    <span>2. DÉVELOPPEMENT</span>
+                    <small>MAX 4</small>
+                </div>
+                <div class="column-body" id="zone-dev"></div>
+            </div>
+
+            <div class="kanban-column" id="col-test">
+                <div class="column-header col-qa">
+                    <span>3. TEST & RECETTE</span>
+                    <small>MAX 2</small>
+                </div>
+                <div class="column-body" id="zone-test"></div>
+            </div>
+
+            <div class="kanban-column" id="col-done">
+                <div class="column-header col-done">
+                    <span>4. PRODUCTION</span>
+                    <small>∞</small>
+                </div>
+                <div class="column-body" id="zone-done"></div>
+            </div>
+        </section>
+
+        <aside class="sidebar-section">
+            
+            <div class="panel-box">
+                <h3>Ressources Disponibles (<span id="free-staff-count">12</span>/12)</h3>
+                <div id="staff-pool" class="tokens-flex" ondrop="dropStaff(event)" ondragover="allowDrop(event)"></div>
+            </div>
+
+            <div class="panel-box">
+                <h3>Incident RH / Événement</h3>
+                <div class="event-slot" id="drawn-card-slot">
+                    <span style="font-size: 7.5pt; color: var(--text-muted); font-style: italic;">Déclenchement automatique tous les 2 tours.</span>
+                </div>
+            </div>
+
+            <div class="panel-box">
+                <h3>Journal de Bord</h3>
+                <div id="event-log" class="event-log">
+                    <div class="log-entry system">Simulation démarrée au Sprint 1.</div>
+                </div>
+            </div>
+
+            <div class="panel-box">
+                <h3>Indicateurs Métriques</h3>
+                <ul class="stats-list">
+                    <li>CA Livré : <strong id="score-value" style="color: var(--accent-green);">0 €</strong></li>
+                    <li>Pénalités : <strong id="score-penalties" style="color: var(--accent-red);">0 €</strong></li>
+                    <li>Projets Livrés : <strong id="score-completed">0</strong></li>
+                    <li>Indisponibilités : <strong id="active-malus-count">0</strong></li>
+                </ul>
+            </div>
+
+        </aside>
+
+    </main>
+
+    <!-- MODAL BILAN -->
+    <div class="modal-overlay" id="end-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Bilan de Fin de Partie (20 Tours)</h2>
+                <button class="btn btn-secondary" onclick="closeEndModal()">Fermer</button>
+            </div>
+            <div>
+                <canvas id="recapChart" height="170"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_TOURS = 20;
+        let currentTour = 1;
+        let activeMalus = [];
+        let totalDeliveredValue = 0;
+        let totalPenalties = 0;
+        let totalCompletedProjects = 0;
+
+        const WIP_LIMITS = { analyse: 4, dev: 4, test: 2 };
+
+        const DEFAULT_TOUR_TIME = 60;
+        let timeRemaining = DEFAULT_TOUR_TIME;
+        let timerInterval = null;
+
+        let historyLabels = [];
+        let historyRevenue = [];
+        let historyPenalties = [];
+        let historyStaffUsage = [];
+
+        const staff = [
+            { id: 's1', role: 'analyst', spec: 'all', label: '📐 PO #1', disabled: false, isLocked: false },
+            { id: 's2', role: 'analyst', spec: 'all', label: '📐 PO #2', disabled: false, isLocked: false },
+            { id: 's3', role: 'dev', spec: 'back', label: '💻 Dev #1 (Back)', disabled: false, isLocked: false },
+            { id: 's4', role: 'dev', spec: 'back', label: '💻 Dev #2 (Back)', disabled: false, isLocked: false },
+            { id: 's5', role: 'dev', spec: 'full', label: '💻 Dev #3 (Full)', disabled: false, isLocked: false },
+            { id: 's6', role: 'dev', spec: 'full', label: '💻 Dev #4 (Full)', disabled: false, isLocked: false },
+            { id: 's7', role: 'dev', spec: 'front', label: '💻 Dev #5 (Front)', disabled: false, isLocked: false },
+            { id: 's8', role: 'dev', spec: 'front', label: '💻 Dev #6 (Front)', disabled: false, isLocked: false },
+            { id: 's9', role: 'qa', spec: 'all', label: '🧪 QA #1', disabled: false, isLocked: false },
+            { id: 's10', role: 'qa', spec: 'all', label: '🧪 QA #2', disabled: false, isLocked: false },
+            { id: 's11', role: 'qa', spec: 'all', label: '🧪 QA #3', disabled: false, isLocked: false },
+            { id: 's12', role: 'qa', spec: 'all', label: '🧪 QA #4', disabled: false, isLocked: false }
+        ];
+
+        let incomingProjects = [];
+        let activeProjects = [];
+        let projectCounter = 1;
+
+        const projectTemplates = [
+            { name: "Portail Client", type: "front", value: 15000, dur: { analyse: 1, dev: 2, test: 1 }, req: { analyst: 1, dev: 2, qa: 1 }, margin: 2 },
+            { name: "Refonte e-Com", type: "full", value: 35000, dur: { analyse: 2, dev: 3, test: 2 }, req: { analyst: 1, dev: 3, qa: 2 }, margin: 3 },
+            { name: "Microservices", type: "back", value: 25000, dur: { analyse: 1, dev: 2, test: 2 }, req: { analyst: 1, dev: 2, qa: 2 }, margin: 2 },
+            { name: "App IoT", type: "back", value: 40000, dur: { analyse: 2, dev: 4, test: 2 }, req: { analyst: 2, dev: 4, qa: 2 }, margin: 3 }
+        ];
+
+        const malusCards = [
+            { title: 'Epidémie de Grippe', type: 'malus', effect: '2 Développeurs absents pour 1 tour.', apply: () => disableRole('dev', 2, 1) },
+            { title: 'Démission QA', type: 'malus', effect: '1 Testeur QA absent pendant 2 tours.', apply: () => disableRole('qa', 1, 2) },
+            { title: 'Panne Serveur Dev', type: 'malus', effect: '2 Développeurs bloqués ce tour.', apply: () => disableRole('dev', 2, 1) },
+            { title: 'Audit Sécurité Imprévu', type: 'malus', effect: '1 Analyste et 1 QA bloqués pour 1 tour.', apply: () => { disableRole('analyst', 1, 1); disableRole('qa', 1, 1); } }
+        ];
+
+        const bonusCards = [
+            { title: 'Renfort Prestataire', type: 'bonus', effect: 'Rétablit immédiatement tous les absents.', apply: () => cureAllStaff() }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initGame();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('btn-next-tour').addEventListener('click', processNextTour);
+            document.getElementById('btn-reset').addEventListener('click', initGame);
+            document.getElementById('btn-reduce-timer').addEventListener('click', reduceTimerForAudit);
+        }
+
+        function initGame() {
+            currentTour = 1;
+            activeMalus = [];
+            totalDeliveredValue = 0;
+            totalPenalties = 0;
+            totalCompletedProjects = 0;
+            projectCounter = 1;
+
+            historyLabels = [];
+            historyRevenue = [];
+            historyPenalties = [];
+            historyStaffUsage = [];
+
+            staff.forEach(s => { s.disabled = false; s.isLocked = false; });
+            incomingProjects = [];
+            activeProjects = [];
+
+            for (let i = 0; i < 3; i++) generateIncomingProject();
+
+            document.getElementById('current-tour-display').innerText = '1';
+            document.getElementById('drawn-card-slot').innerHTML = '<span style="font-size: 7.5pt; color: var(--text-muted); font-style: italic;">Déclenchement automatique tous les 2 tours.</span>';
+            document.getElementById('event-log').innerHTML = '<div class="log-entry system">Simulation démarrée au Sprint 1.</div>';
+
+            renderStaff();
+            renderIncoming();
+            renderKanban();
+            updateStats();
+            startTourTimer();
+        }
+
+        function generateIncomingProject() {
+            if (incomingProjects.length >= 4) return;
+
+            const tmpl = projectTemplates[Math.floor(Math.random() * projectTemplates.length)];
+            const totalTheoDur = tmpl.dur.analyse + tmpl.dur.dev + tmpl.dur.test;
+
+            const newProj = {
+                id: `p${projectCounter++}`,
+                name: `${tmpl.name} #${projectCounter}`,
+                type: tmpl.type,
+                value: tmpl.value,
+                stage: 'incoming',
+                dur: { ...tmpl.dur },
+                req: { ...tmpl.req },
+                progress: 0,
+                hasMaintenanceBug: false,
+                margin: tmpl.margin,
+                totalTheoDur: totalTheoDur,
+                maxSprintDeadline: 0,
+                acceptedTour: 0
+            };
+
+            incomingProjects.push(newProj);
+            renderIncoming();
+        }
+
+        function renderIncoming() {
+            const container = document.getElementById('incoming-container');
+            container.innerHTML = '';
+
+            incomingProjects.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'project-card';
+                card.draggable = true;
+                card.ondragstart = (ev) => ev.dataTransfer.setData("text/plain", p.id);
+
+                let typeLabel = "Fullstack";
+                if (p.type === 'back') typeLabel = "Backend";
+                if (p.type === 'front') typeLabel = "Frontend";
+
+                card.innerHTML = `
+                    <div class="project-header">
+                        <span>${p.name}</span>
+                        <span style="color:var(--accent-green);">${p.value.toLocaleString()} €</span>
+                    </div>
+                    <div class="project-info">
+                        Type: <strong>${typeLabel}</strong><br>
+                        Specs: ${p.dur.analyse}T | Dev: ${p.dur.dev}T | QA: ${p.dur.test}T
+                    </div>
+                    <div class="role-req-box">📐${p.req.analyst} | 💻${p.req.dev} | 🧪${p.req.qa}</div>
+                    <div class="deadline-tag">⏱ Durée max : ${p.totalTheoDur + p.margin} Sprints</div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function dropProjectToAnalyse(ev) {
+            ev.preventDefault();
+            const projId = ev.dataTransfer.getData("text/plain");
+
+            const currentAnalyseCount = activeProjects.filter(p => p.stage === 'analyse').length;
+            if (currentAnalyseCount >= WIP_LIMITS.analyse) {
+                logEvent(`⛔ WIP BLOCAGE : La colonne Analyse a atteint sa limite de ${WIP_LIMITS.analyse} projets !`, 'malus');
+                return;
+            }
+
+            const index = incomingProjects.findIndex(p => p.id === projId);
+            if (index !== -1) {
+                const proj = incomingProjects.splice(index, 1)[0];
+                proj.stage = 'analyse';
+                proj.progress = 0;
+                proj.acceptedTour = currentTour;
+                proj.maxSprintDeadline = currentTour + proj.totalTheoDur + proj.margin;
+
+                activeProjects.push(proj);
+
+                logEvent(`📥 PROJET ACCEPTÉ : ${proj.name} placé en ANALYSE (Échéance: Sprint ${proj.maxSprintDeadline}).`, 'system');
+                renderIncoming();
+                renderKanban();
+                updateStats();
+            }
+        }
+
+        function startTourTimer(customSeconds = DEFAULT_TOUR_TIME) {
+            clearInterval(timerInterval);
+            timeRemaining = customSeconds;
+            updateTimerDisplay();
+
+            const timerBox = document.getElementById('timer-box');
+            timerBox.classList.remove('warning');
+
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                if (timeRemaining <= 15) timerBox.classList.add('warning');
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    logEvent(`⏰ TEMPS ÉCOULÉ ! Validation automatique du tour...`, 'malus');
+                    processNextTour();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            document.getElementById('timer-display').innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function reduceTimerForAudit() {
+            startTourTimer(30);
+            logEvent(`⚡ AUDIT EXPRESS : Temps de tour réduit à 30 secondes !`, 'malus');
+        }
+
+        function triggerAutoIncident() {
+            const rand = Math.random();
+            const type = rand < 0.70 ? 'malus' : 'bonus';
+            const deck = type === 'bonus' ? bonusCards : malusCards;
+            const card = deck[Math.floor(Math.random() * deck.length)];
+
+            const slot = document.getElementById('drawn-card-slot');
+            slot.innerHTML = `
+                <div class="card-display ${card.type}">
+                    <strong>${card.title}</strong><br>${card.effect}
+                </div>
+            `;
+
+            logEvent(`⚡ INCIDENT AUTOMATIQUE : ${card.title} — ${card.effect}`, card.type);
+            card.apply();
+        }
+
+        function processNextTour() {
+            if (currentTour > TOTAL_TOURS) {
+                showEndModal();
+                return;
+            }
+
+            logEvent(`--- VALIDATION DU SPRINT ${currentTour} ---`, 'system');
+
+            if (currentTour % 2 === 0) {
+                triggerAutoIncident();
+            }
+
+            activeProjects.forEach(p => {
+                const zone = document.getElementById(`drop-${p.id}`);
+                const assignedDetails = getAssignedStaffDetails(zone);
+
+                if (zone && zone.children.length > 0) {
+                    assignedDetails.ids.forEach(id => {
+                        const member = staff.find(s => s.id === id);
+                        if (member) member.isLocked = true;
+                    });
+                }
+
+                if (p.stage !== 'done' && currentTour > p.maxSprintDeadline) {
+                    totalPenalties += 5000;
+                    logEvent(`⌛ ÉCHÉANCE DÉPASSÉE : ${p.name} est en retard ! -5 000 € pénalité.`, 'malus');
+                }
+
+                if (assignedDetails.hasDisabledStaff && p.stage !== 'done') {
+                    logEvent(`🛑 TÂCHE FIGÉE sur ${p.name} : Au moins un membre affecté est indisponible !`, 'malus');
+                    return;
+                }
+
+                if (p.stage === 'analyse') {
+                    if (assignedDetails.analyst >= p.req.analyst) {
+                        p.progress++;
+                        if (p.progress >= p.dur.analyse) {
+                            const currentDevCount = activeProjects.filter(x => x.stage === 'dev').length;
+                            if (currentDevCount < WIP_LIMITS.dev) {
+                                p.stage = 'dev';
+                                p.progress = 0;
+                                logEvent(`📐 ${p.name} : Specs terminées ➔ Transmis en DÉVELOPPEMENT.`, 'bonus');
+                                freeStaffFromZone(zone);
+                            } else {
+                                logEvent(`🛑 WIP DEV SATURÉ : ${p.name} reste en Analyse (Dev à ${WIP_LIMITS.dev} projets) !`, 'malus');
+                            }
+                        }
+                    }
+                } else if (p.stage === 'dev') {
+                    if (assignedDetails.dev >= p.req.dev) {
+                        let mismatch = false;
+
+                        if (p.type === 'back' && assignedDetails.devSpecs.includes('front') && !assignedDetails.devSpecs.includes('back') && !assignedDetails.devSpecs.includes('full')) {
+                            mismatch = true;
+                        } else if (p.type === 'front' && assignedDetails.devSpecs.includes('back') && !assignedDetails.devSpecs.includes('front') && !assignedDetails.devSpecs.includes('full')) {
+                            mismatch = true;
+                        }
+
+                        const uniqueSpecs = new Set(assignedDetails.devSpecs);
+                        if (assignedDetails.dev >= 3 && uniqueSpecs.size === 1) {
+                            mismatch = true;
+                            logEvent(`⚠️ MONO-COMPÉTENCE : Équipe de 3+ devs d'un seul profil sur ${p.name} (+1 tour) !`, 'malus');
+                        }
+
+                        if (mismatch) {
+                            p.dur.dev += 1;
+                            logEvent(`⚠️ INCOMPATIBILITÉ TECHNIQUE sur ${p.name} : Devs inadaptés (Durée rallongée) !`, 'malus');
+                        }
+
+                        p.progress++;
+                        if (p.progress >= p.dur.dev) {
+                            const currentTestCount = activeProjects.filter(x => x.stage === 'test').length;
+                            if (currentTestCount < WIP_LIMITS.test) {
+                                p.stage = 'test';
+                                p.progress = 0;
+                                logEvent(`💻 ${p.name} : Dev terminé ➔ Transmis en TEST / QA.`, 'bonus');
+                                freeStaffFromZone(zone);
+                            } else {
+                                logEvent(`🛑 WIP TEST SATURÉ : ${p.name} reste en Dev (QA à ${WIP_LIMITS.test} projets) !`, 'malus');
+                            }
+                        }
+                    }
+                } else if (p.stage === 'test') {
+                    if (assignedDetails.qa >= p.req.qa) {
+                        p.progress++;
+                        if (p.progress >= p.dur.test) {
+                            p.stage = 'done';
+                            p.progress = 0;
+                            totalDeliveredValue += p.value;
+                            totalCompletedProjects++;
+                            logEvent(`🎉 ${p.name} : Recette validée ➔ LIVRÉ EN PRODUCTION (+${p.value.toLocaleString()} €) !`, 'bonus');
+                            freeStaffFromZone(zone);
+                        }
+                    }
+                } else if (p.stage === 'done') {
+                    if (p.hasMaintenanceBug) {
+                        if (assignedDetails.dev >= 1) {
+                            p.hasMaintenanceBug = false;
+                            logEvent(`🔧 MAINTENANCE : Bug corrigé sur ${p.name} par un Dev !`, 'bonus');
+                            freeStaffFromZone(zone);
+                        } else {
+                            totalPenalties += 5000;
+                            logEvent(`💥 MAINTENANCE : Bug critique non résolu sur ${p.name} (-5 000 €) !`, 'malus');
+                        }
+                    } else {
+                        if (Math.random() < 0.3) {
+                            p.hasMaintenanceBug = true;
+                            logEvent(`🔥 ALERTE PROD : Incident technique détecté sur ${p.name} ! Dev requis.`, 'malus');
+                        }
+                    }
+                }
+            });
+
+            activeMalus.forEach(m => m.duration--);
+            activeMalus = activeMalus.filter(m => {
+                if (m.duration <= 0) {
+                    const s = staff.find(x => x.id === m.staffId);
+                    if (s) s.disabled = false;
+                    logEvent(`Un membre d'équipe est de retour !`, 'system');
+                    return false;
+                }
+                return true;
+            });
+
+            if (incomingProjects.length < 4) generateIncomingProject();
+
+            historyLabels.push(`T${currentTour}`);
+            historyRevenue.push(totalDeliveredValue);
+            historyPenalties.push(totalPenalties);
+            
+            let currentBusyStaff = 0;
+            activeProjects.forEach(p => {
+                const zone = document.getElementById(`drop-${p.id}`);
+                if (zone) currentBusyStaff += zone.children.length;
+            });
+            historyStaffUsage.push(currentBusyStaff);
+
+            currentTour++;
+            if (currentTour <= TOTAL_TOURS) {
+                document.getElementById('current-tour-display').innerText = currentTour;
+                startTourTimer();
+            } else {
+                clearInterval(timerInterval);
+                logEvent(`🏁 FIN DU CYCLE (20 TOURS) ! Net livré : ${(totalDeliveredValue - totalPenalties).toLocaleString()} €`, 'system');
+                showEndModal();
+            }
+
+            renderStaff();
+            renderIncoming();
+            renderKanban();
+            updateStats();
+        }
+
+        function freeStaffFromZone(zone) {
+            if (!zone) return;
+            Array.from(zone.children).forEach(token => {
+                const member = staff.find(s => s.id === token.id);
+                if (member) member.isLocked = false;
+                document.getElementById('staff-pool').appendChild(token);
+            });
+        }
+
+        function getAssignedStaffDetails(zone) {
+            const comp = { analyst: 0, dev: 0, qa: 0, devSpecs: [], ids: [], hasDisabledStaff: false };
+            if (!zone) return comp;
+
+            Array.from(zone.children).forEach(el => {
+                comp.ids.push(el.id);
+                const s = staff.find(x => x.id === el.id);
+                if (s) {
+                    if (s.disabled) comp.hasDisabledStaff = true;
+                    if (s.role === 'analyst') comp.analyst++;
+                    if (s.role === 'dev') { comp.dev++; comp.devSpecs.push(s.spec); }
+                    if (s.role === 'qa') comp.qa++;
+                }
+            });
+            return comp;
+        }
+
+        function renderStaff() {
+            const pool = document.getElementById('staff-pool');
+            staff.forEach(s => {
+                let el = document.getElementById(s.id);
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = s.id;
+                    pool.appendChild(el);
+                }
+                
+                const isBlocked = s.disabled || s.isLocked;
+                el.className = `token ${s.role} ${s.isLocked ? 'locked' : ''} ${s.disabled ? 'disabled' : ''}`;
+                el.draggable = !isBlocked;
+                
+                let stateTag = '';
+                if (s.disabled) stateTag = ' 🤒';
+                else if (s.isLocked) stateTag = ' 🔒';
+
+                el.innerText = `${s.label}${stateTag}`;
+                el.ondragstart = dragStaff;
+            });
+        }
+
+        function renderKanban() {
+            const zones = {
+                analyse: document.getElementById('zone-analyse'),
+                dev: document.getElementById('zone-dev'),
+                test: document.getElementById('zone-test'),
+                done: document.getElementById('zone-done')
+            };
+
+            const savedDropzones = {};
+            activeProjects.forEach(p => {
+                const zone = document.getElementById(`drop-${p.id}`);
+                if (zone && zone.children.length > 0) {
+                    savedDropzones[p.id] = Array.from(zone.children);
+                }
+            });
+
+            Object.values(zones).forEach(z => z.innerHTML = '');
+
+            activeProjects.forEach(p => {
+                const card = document.createElement('div');
+                const isOverdue = p.stage !== 'done' && currentTour > p.maxSprintDeadline;
+                
+                const zone = document.getElementById(`drop-${p.id}`);
+                const details = getAssignedStaffDetails(zone);
+
+                card.className = `project-card ${p.hasMaintenanceBug ? 'maint-alert' : ''} ${isOverdue ? 'late-alert' : ''} ${details.hasDisabledStaff ? 'blocked-malus' : ''}`;
+                card.id = `card-${p.id}`;
+
+                let currentRoleReq = `📐 ${p.req.analyst} PO Requis`;
+                let targetDuration = p.dur.analyse;
+
+                if (p.stage === 'dev') { currentRoleReq = `💻 ${p.req.dev} Dev(s) Requis (${p.type.toUpperCase()})`; targetDuration = p.dur.dev; }
+                if (p.stage === 'test') { currentRoleReq = `🧪 ${p.req.qa} QA(s) Requis`; targetDuration = p.dur.test; }
+                if (p.stage === 'done') {
+                    currentRoleReq = p.hasMaintenanceBug ? "🔥 BUG EN PROD : 💻 1 Dev Requis !" : "✓ En Production (Stable)";
+                }
+
+                const pct = p.stage !== 'done' ? (p.progress / targetDuration) * 100 : 100;
+                const deadlineTagClass = isOverdue ? 'deadline-tag overdue' : 'deadline-tag';
+                const deadlineText = p.stage !== 'done' ? `⏱ Échéance : Sprint ${p.maxSprintDeadline}` : '✓ Livré';
+
+                card.innerHTML = `
+                    <div class="project-header">
+                        <span>${p.name}</span>
+                        <span style="color:var(--accent-green);">${p.value.toLocaleString()} €</span>
+                    </div>
+                    <div class="project-info">Avancement : ${p.progress}/${targetDuration} tour(s) ${details.hasDisabledStaff ? '<strong>(FIGÉ)</strong>' : ''}</div>
+                    ${p.stage !== 'done' ? `<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>` : ''}
+                    <div class="${deadlineTagClass}">${deadlineText}</div>
+                    <div class="role-req-box">${currentRoleReq}</div>
+                    <div class="dropzone-stage" id="drop-${p.id}" ondrop="dropStaff(event)" ondragover="allowDrop(event)"></div>
+                `;
+
+                zones[p.stage].appendChild(card);
+
+                if (savedDropzones[p.id]) {
+                    const newZone = card.querySelector('.dropzone-stage');
+                    savedDropzones[p.id].forEach(child => newZone.appendChild(child));
+                }
+            });
+        }
+
+        function allowDrop(ev) { ev.preventDefault(); }
+
+        function dragStaff(ev) {
+            const staffId = ev.target.id;
+            const member = staff.find(s => s.id === staffId);
+            if (member && (member.disabled || member.isLocked)) {
+                ev.preventDefault();
+                return;
+            }
+            ev.dataTransfer.setData("text", staffId);
+        }
+
+        function dropStaff(ev) {
+            ev.preventDefault();
+            const staffId = ev.dataTransfer.getData("text");
+            const member = staff.find(s => s.id === staffId);
+
+            if (!member || member.disabled || member.isLocked) return;
+
+            const staffEl = document.getElementById(staffId);
+            let target = ev.target;
+
+            while (target && !target.classList.contains('dropzone-stage') && !target.classList.contains('tokens-flex')) {
+                target = target.parentElement;
+            }
+
+            if (target) {
+                target.appendChild(staffEl);
+                updateStats();
+            }
+        }
+
+        function disableRole(role, count, duration) {
+            let remainingToDisable = count;
+
+            const freeMembers = staff.filter(s => s.role === role && !s.disabled && !s.isLocked);
+            while (remainingToDisable > 0 && freeMembers.length > 0) {
+                const target = freeMembers.pop();
+                target.disabled = true;
+                const el = document.getElementById(target.id);
+                document.getElementById('staff-pool').appendChild(el);
+                activeMalus.push({ staffId: target.id, duration: duration });
+                remainingToDisable--;
+            }
+
+            if (remainingToDisable > 0) {
+                const sortedProjects = [...activeProjects]
+                    .filter(p => p.stage !== 'done')
+                    .sort((a, b) => b.acceptedTour - a.acceptedTour);
+
+                for (let p of sortedProjects) {
+                    if (remainingToDisable <= 0) break;
+
+                    const zone = document.getElementById(`drop-${p.id}`);
+                    if (!zone) continue;
+
+                    const assignedNodes = Array.from(zone.children);
+                    for (let node of assignedNodes) {
+                        const s = staff.find(x => x.id === node.id);
+                        if (s && s.role === role && !s.disabled) {
+                            s.disabled = true;
+                            activeMalus.push({ staffId: s.id, duration: duration });
+                            remainingToDisable--;
+                            logEvent(`🤒 MALUS : ${s.label} est tombé malade sur ${p.name} ! Tâche suspendue.`, 'malus');
+                            if (remainingToDisable <= 0) break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function cureAllStaff() {
+            staff.forEach(s => s.disabled = false);
+            activeMalus = [];
+            logEvent(`L'équipe est de nouveau au complet !`, 'bonus');
+        }
+
+        function updateStats() {
+            let lockedCount = 0;
+            activeProjects.forEach(p => {
+                const zone = document.getElementById(`drop-${p.id}`);
+                if (zone) lockedCount += zone.children.length;
+            });
+
+            document.getElementById('free-staff-count').innerText = 12 - lockedCount;
+            document.getElementById('score-value').innerText = `${totalDeliveredValue.toLocaleString()} €`;
+            document.getElementById('score-penalties').innerText = `- ${totalPenalties.toLocaleString()} €`;
+            document.getElementById('score-completed').innerText = totalCompletedProjects;
+            document.getElementById('active-malus-count').innerText = activeMalus.length;
+        }
+
+        function logEvent(msg, type = 'system') {
+            const log = document.getElementById('event-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerText = msg;
+            log.prepend(entry);
+        }
+
+        let recapChartInstance = null;
+
+        function showEndModal() {
+            document.getElementById('end-modal').style.display = 'flex';
+            const ctx = document.getElementById('recapChart').getContext('2d');
+
+            if (recapChartInstance) recapChartInstance.destroy();
+
+            recapChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: historyLabels,
+                    datasets: [
+                        {
+                            label: "CA Livré (€)",
+                            data: historyRevenue,
+                            borderColor: '#0f9d63',
+                            backgroundColor: 'rgba(15, 157, 99, 0.12)',
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: "Pénalités (€)",
+                            data: historyPenalties,
+                            borderColor: '#d13438',
+                            backgroundColor: 'rgba(209, 52, 56, 0.12)',
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: "Ressources Occupées",
+                            data: historyStaffUsage,
+                            borderColor: '#0b74c4',
+                            borderDash: [4, 4],
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: '#e2e6ec' },
+                            ticks: { color: '#64748b' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            min: 0,
+                            max: 12,
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#64748b' }
+                        },
+                        x: {
+                            grid: { color: '#e2e6ec' },
+                            ticks: { color: '#64748b' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#1f2937' } }
+                    }
+                }
+            });
+        }
+
+        function closeEndModal() {
+            document.getElementById('end-modal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
