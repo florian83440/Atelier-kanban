@@ -124,7 +124,10 @@ function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1);
   >
     <div class="project-header">
       <span>{{ project.name }}</span>
-      <span class="project-value">{{ fmt(project.value) }} €</span>
+      <span class="project-value">
+        {{ fmt(project.value) }} €<template v-if="project.earned > 0 && project.stage !== 'done'">
+          <span class="project-earned">encaissé {{ fmt(project.earned) }}</span></template>
+      </span>
     </div>
     <div class="project-info">
       Avancement : {{ fmtProgress(project.progress) }}/{{ targetDuration }} tour(s)

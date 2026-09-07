@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { WIP_LIMITS } from '@kanban-it/shared';
+import { WIP_LIMITS, netValue } from '@kanban-it/shared';
 import AppIcon from '../AppIcon.vue';
 
 const props = defineProps({
@@ -14,7 +14,7 @@ const emit = defineEmits(['inspect']);
 function fmt(n) { return n.toLocaleString('fr-FR'); }
 function fmtProgress(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 
-const net = computed(() => props.team.totalDeliveredValue - props.team.totalPenalties);
+const net = computed(() => netValue(props.team));
 
 const STAGES = [
   { key: 'analyse', label: 'Analyse' },
@@ -102,6 +102,9 @@ const lastLog = computed(() => props.team.log[0] || null);
       </div>
       <div class="tb-kpi">
         <span>Pénalités</span><strong class="neg">- {{ fmt(team.totalPenalties) }} €</strong>
+      </div>
+      <div v-if="team.totalHiringCost" class="tb-kpi">
+        <span>Recrutement</span><strong class="neg">- {{ fmt(team.totalHiringCost) }} €</strong>
       </div>
       <div class="tb-kpi">
         <span>Projets livrés</span><strong>{{ team.totalCompletedProjects }}</strong>

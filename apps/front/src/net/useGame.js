@@ -114,6 +114,7 @@ export function joinGame({ name, code, teamName }) {
 }
 export function acceptProject(projectId) { send({ type: 'acceptProject', projectId }); }
 export function rejectProject(projectId) { send({ type: 'rejectProject', projectId }); }
+export function hireDev(spec) { send({ type: 'hireDev', spec }); }
 export function assignStaff(staffId, projectId) { send({ type: 'assignStaff', staffId, projectId }); }
 export function unassignStaff(staffId) { send({ type: 'unassignStaff', staffId }); }
 

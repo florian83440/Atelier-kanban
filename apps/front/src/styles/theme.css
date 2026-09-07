@@ -579,7 +579,7 @@ body {
 .tb-name { font-size: 19px; font-weight: 800; }
 .tb-players { margin-left: auto; font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 3px; }
 
-.tb-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tb-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 6px; }
 .tb-kpi { display: flex; flex-direction: column; border: 1px solid var(--border-light); padding: 5px 8px; }
 .tb-kpi span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
 .tb-kpi strong { font-size: 16px; font-weight: 800; }
@@ -717,3 +717,13 @@ body {
 .lobby-team-list .app-icon { vertical-align: -0.15em; }
 .lobby-start { margin-top: 10px; font-size: 13px; padding: 10px 20px; }
 .lobby-hint { margin: 6px 0 0; font-size: 11px; }
+
+/* RECRUTEMENT */
+.hire-hint { margin: 0 0 6px; font-size: 7.5pt; color: var(--text-muted); }
+.hire-btns { display: flex; flex-direction: column; gap: 4px; }
+.hire-btn { justify-content: space-between; font-size: 8pt; }
+.hire-cost { color: var(--accent-red); font-weight: 700; }
+.hire-total { margin: 6px 0 0; font-size: 8pt; }
+.hire-total strong { color: var(--accent-red); }
+
+.project-earned { display: block; font-size: 6.5pt; color: var(--text-muted); font-weight: 600; }

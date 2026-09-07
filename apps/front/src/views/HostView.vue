@@ -8,7 +8,7 @@ import {
   hostAdjustTimer,
   hostReset,
 } from '../net/useGame.js';
-import { TIMER_STEP } from '@kanban-it/shared';
+import { TIMER_STEP, netValue } from '@kanban-it/shared';
 import { useCountdown } from '../lib/useCountdown.js';
 import TeamSummaryCard from '../components/host/TeamSummaryCard.vue';
 import EndModal from '../components/EndModal.vue';
@@ -29,7 +29,7 @@ const phaseLabel = computed(() =>
 );
 
 const totalNet = computed(() =>
-  teams.value.reduce((n, t) => n + (t.totalDeliveredValue - t.totalPenalties), 0),
+  teams.value.reduce((n, t) => n + netValue(t), 0),
 );
 const totalDelivered = computed(() =>
   teams.value.reduce((n, t) => n + t.totalDeliveredValue, 0),
@@ -40,7 +40,7 @@ const ranking = computed(() =>
     .map((t) => ({
       id: t.id,
       name: t.name,
-      net: t.totalDeliveredValue - t.totalPenalties,
+      net: netValue(t),
       delivered: t.totalDeliveredValue,
       penalties: t.totalPenalties,
       completed: t.totalCompletedProjects,

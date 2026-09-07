@@ -5,12 +5,14 @@
 import {
   acceptProject,
   rejectProject,
+  hireDev,
   assignStaff,
   unassignStaff,
   startGame,
   advanceSprint,
   adjustSprintTime,
   resetGame,
+  netValue,
 } from '@kanban-it/shared';
 import {
   createRoom,
@@ -42,7 +44,8 @@ function teamSummary(team) {
     playerCount: team.players.length,
     delivered: team.totalDeliveredValue,
     penalties: team.totalPenalties,
-    net: team.totalDeliveredValue - team.totalPenalties,
+    hiring: team.totalHiringCost || 0,
+    net: netValue(team),
     completed: team.totalCompletedProjects,
     absent: team.activeMalus.length,
     inProgress: team.activeProjects.filter((p) => p.stage !== 'done').length,
@@ -148,13 +151,15 @@ function handleJoinGame(ws, msg) {
 
 // ---------------------------------------------------------------- intents / controle
 
-const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'assignStaff', 'unassignStaff']);
+const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'hireDev', 'assignStaff', 'unassignStaff']);
 const HOST_CONTROLS = new Set(['startGame', 'validateSprint', 'adjustTimer', 'resetGame']);
 
 const INTENT_ERRORS = {
   wip: 'Colonne Analyse pleine (max 4) — impossible d\'accepter une nouvelle demande.',
   'not-found': 'Cette demande n\'existe plus (déjà prise ou sprint validé). Rechargez si besoin.',
-  blocked: 'Ce membre est indisponible ou verrouillé sur une tâche.',
+  blocked: 'Ce membre est indisponible.',
+  'bad-spec': 'Spécialité de dev inconnue.',
+  'not-running': 'La partie n\'a pas encore démarré.',
 };
 
 function ctx(ws) {
@@ -176,7 +181,11 @@ function handlePlayerIntent(ws, msg) {
   let res = { ok: true };
   if (msg.type === 'acceptProject') res = acceptProject(team, msg.projectId, room.game.sprint);
   else if (msg.type === 'rejectProject') res = rejectProject(team, msg.projectId, room.game.sprint);
-  else if (msg.type === 'assignStaff') res = assignStaff(team, msg.staffId, msg.projectId);
+  else if (msg.type === 'hireDev') {
+    res = room.game.phase === 'running'
+      ? hireDev(team, msg.spec, room.game.sprint)
+      : { ok: false, reason: 'not-running' };
+  } else if (msg.type === 'assignStaff') res = assignStaff(team, msg.staffId, msg.projectId);
   else if (msg.type === 'unassignStaff') res = unassignStaff(team, msg.staffId);
 
   if (res && res.ok === false) err(ws, INTENT_ERRORS[res.reason] || 'Action impossible.');

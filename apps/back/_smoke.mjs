@@ -112,6 +112,12 @@ try {
   s1 = await p1.waitFor('snapshot', (m) => !m.team.incomingProjects.some((p) => p.id === toReject));
   assert(s1.team.incomingProjects.length === 3, 'file toujours a 3 apres ecart (remplacement)');
 
+  // --- Recruter un dev : effectif +1, cout deduit du net
+  const staffBefore = s1.team.staff.length;
+  p1.send({ type: 'hireDev', spec: 'full' });
+  s1 = await p1.waitFor('snapshot', (m) => m.team.staff.length === staffBefore + 1);
+  assert(s1.team.totalHiringCost === 35000, 'recrutement full = 35 000 €');
+
   // --- Joueur 1 accepte un projet + affecte un PO
   const proj = s1.team.incomingProjects[0];
   p1.send({ type: 'acceptProject', projectId: proj.id });

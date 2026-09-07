@@ -1,8 +1,8 @@
 import {
   createGameState, createTeamState, startGame, advanceSprint,
   acceptProject, rejectProject, assignStaff, unassignStaff, disableRole,
-  devEffectiveness, drawIncident, createIncomingProject,
-  TOTAL_SPRINTS, PROJECT_TEMPLATES,
+  devEffectiveness, drawIncident, createIncomingProject, hireDev, netValue,
+  TOTAL_SPRINTS, PROJECT_TEMPLATES, HIRE_COST, STAGE_PAYOUT,
 } from './src/index.js';
 
 function rng32(seed) {
@@ -266,6 +266,88 @@ function rng32(seed) {
     throw new Error(`les "fast" doivent etre plus frequents tard (tot ${early.fast}, tard ${late.fast})`);
   }
   console.log('[8] Offre evolutive : sprint1', early, '| sprint20', late, ': OK');
+}
+
+// ---- 9) 2 nouvelles demandes par sprint, plafonnees a MAX_INCOMING (4) ----
+{
+  const game = createGameState('QUEUE', 'h1');
+  const team = createTeamState('t1', 'Solo');
+  game.teams.t1 = team;
+  startGame(game); // 3 demandes au depart
+
+  // On vide la file puis on valide un sprint : +2 attendus
+  team.incomingProjects = [];
+  advanceSprint(game, () => 0.5);
+  if (team.incomingProjects.length !== 2) throw new Error('file vide + 1 sprint -> 2 demandes, obtenu ' + team.incomingProjects.length);
+
+  // File a 3 : +2 mais plafonne a 4
+  while (team.incomingProjects.length < 3) createIncomingProject(team, () => 0.5, game.sprint);
+  advanceSprint(game, () => 0.5);
+  if (team.incomingProjects.length !== 4) throw new Error('file a 3 + 1 sprint -> plafond 4, obtenu ' + team.incomingProjects.length);
+
+  // File pleine : reste a 4
+  advanceSprint(game, () => 0.5);
+  if (team.incomingProjects.length !== 4) throw new Error('file pleine reste a 4, obtenu ' + team.incomingProjects.length);
+  console.log('[9] 2 demandes / sprint, plafond 4 : OK');
+}
+
+// ---- 10) Recrutement de devs : cout deduit du CA net, dev dispo immediatement ----
+{
+  const team = createTeamState('t1', 'Solo');
+  const devsBefore = team.staff.filter((s) => s.role === 'dev').length;
+  team.totalDeliveredValue = 100000;
+  if (netValue(team) !== 100000) throw new Error('net initial = CA livre');
+
+  let r = hireDev(team, 'full', 1);
+  if (!r.ok) throw new Error('hireDev full doit reussir');
+  if (team.totalHiringCost !== HIRE_COST.full) throw new Error('cout full = ' + HIRE_COST.full);
+  if (netValue(team) !== 100000 - HIRE_COST.full) throw new Error('net = CA - recrutement');
+
+  r = hireDev(team, 'back', 1);
+  if (netValue(team) !== 100000 - HIRE_COST.full - HIRE_COST.back) throw new Error('cumul recrutement');
+
+  const devsAfter = team.staff.filter((s) => s.role === 'dev');
+  if (devsAfter.length !== devsBefore + 2) throw new Error('2 devs ajoutes a l\'effectif');
+  const last = devsAfter[devsAfter.length - 1];
+  if (last.spec !== 'back' || last.disabled) throw new Error('le dev recrute est dispo, du bon type');
+  if (hireDev(team, 'senior', 1).ok) throw new Error('specialite inconnue doit echouer');
+  console.log('[10] Recrutement : cout deduit du net, dev dispo : OK');
+}
+
+// ---- 11) CA encaisse par etapes : analyse 5% / dev 20% / livraison 75% ----
+{
+  const game = createGameState('PAY', 'h1');
+  const team = createTeamState('t1', 'Solo');
+  game.teams.t1 = team;
+  startGame(game);
+
+  const pid = team.incomingProjects[0].id;
+  acceptProject(team, pid, game.sprint);
+  const P = () => team.activeProjects.find((p) => p.id === pid);
+  const p = P();
+  p.value = 100000;
+  p.dur = { analyse: 1, dev: 1, test: 1 };
+  p.req = { analyst: 1, dev: 1, qa: 1 };
+  p.type = 'full';
+
+  const po = team.staff.find((s) => s.role === 'analyst').id;
+  const dev = team.staff.find((s) => s.role === 'dev' && s.spec === 'full').id;
+  const qa = team.staff.find((s) => s.role === 'qa').id;
+
+  assignStaff(team, po, pid); advanceSprint(game, () => 0.99); // analyse -> dev
+  const afterAnalyse = team.totalDeliveredValue;
+  if (afterAnalyse !== Math.round(100000 * STAGE_PAYOUT.analyse)) throw new Error('part analyse = 5% (' + afterAnalyse + ')');
+
+  assignStaff(team, dev, pid); advanceSprint(game, () => 0.99); // dev -> test
+  const afterDev = team.totalDeliveredValue;
+  if (afterDev !== afterAnalyse + Math.round(100000 * STAGE_PAYOUT.dev)) throw new Error('part dev = 20% (' + afterDev + ')');
+
+  assignStaff(team, qa, pid); advanceSprint(game, () => 0.99); // test -> done
+  if (P().stage !== 'done') throw new Error('le projet doit etre livre, stage=' + P().stage);
+  if (team.totalDeliveredValue !== 100000) throw new Error('total encaisse == valeur du projet (' + team.totalDeliveredValue + ')');
+  if (P().earned !== 100000) throw new Error('project.earned == value');
+  if (team.totalCompletedProjects !== 1) throw new Error('1 projet livre');
+  console.log('[11] CA par etapes 5/20/75, total exact : OK');
 }
 
 console.log('SMOKE LOGIQUE OK');

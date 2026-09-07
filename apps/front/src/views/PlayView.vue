@@ -6,6 +6,7 @@ import IncomingSection from '../components/IncomingSection.vue';
 import KanbanBoard from '../components/KanbanBoard.vue';
 import StaffPool from '../components/StaffPool.vue';
 import IncidentSlot from '../components/IncidentSlot.vue';
+import HirePanel from '../components/HirePanel.vue';
 import EventLog from '../components/EventLog.vue';
 import MetricsPanel from '../components/MetricsPanel.vue';
 import EndModal from '../components/EndModal.vue';
@@ -59,6 +60,7 @@ const endHistory = computed(
 
       <aside>
         <StaffPool :team="team" />
+        <HirePanel :team="team" />
         <IncidentSlot :card="team.drawnCard" />
         <EventLog :log="team.log" />
         <MetricsPanel :team="team" />

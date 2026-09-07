@@ -9,6 +9,8 @@ import {
   DEFAULT_SPRINT_TIME,
   TIMER_STEP,
   STAFF_ROSTER,
+  HIRE_COST,
+  STAGE_PAYOUT,
 } from '@kanban-it/shared';
 import AppIcon from './AppIcon.vue';
 
@@ -40,6 +42,12 @@ const bugPct = Math.round(MAINTENANCE_BUG_CHANCE * 100);
           {{ WIP_LIMITS.dev }} · Test {{ WIP_LIMITS.test }}. Une colonne pleine bloque
           l'étape précédente.
         </p>
+        <p class="muted">
+          Le CA d'un projet est encaissé par étapes :
+          {{ Math.round(STAGE_PAYOUT.analyse * 100) }} % à la fin de l'analyse,
+          {{ Math.round(STAGE_PAYOUT.dev * 100) }} % à la fin du dév, et
+          <strong>{{ Math.round(STAGE_PAYOUT.test * 100) }} % à la livraison</strong>.
+        </p>
       </section>
 
       <section class="rules-card">
@@ -54,6 +62,16 @@ const bugPct = Math.round(MAINTENANCE_BUG_CHANCE * 100);
           projet à l'autre <strong>à tout moment</strong> — aucun verrou. Seule une
           absence (incident) l'immobilise.
         </p>
+      </section>
+
+      <section class="rules-card">
+        <h3><AppIcon name="plus" /> Recrutement</h3>
+        <p>
+          Engagez des devs à tout moment :
+          <strong>Back / Front {{ (HIRE_COST.front / 1000) }} k€</strong>,
+          <strong>Full {{ (HIRE_COST.full / 1000) }} k€</strong>.
+        </p>
+        <p class="muted">Le coût est déduit du CA net — plus vite mais moins rentable.</p>
       </section>
 
       <section class="rules-card">
@@ -77,9 +95,9 @@ const bugPct = Math.round(MAINTENANCE_BUG_CHANCE * 100);
       <section class="rules-card">
         <h3><AppIcon name="inbox" /> Demandes entrantes</h3>
         <p>
-          {{ MAX_INCOMING }} demandes max en file. « Prendre en analyse » pour démarrer,
-          <AppIcon name="close" /> pour <strong>écarter</strong> une demande (remplacée
-          aussitôt).
+          {{ MAX_INCOMING }} demandes max en file, <strong>2 nouvelles par sprint</strong>.
+          « Prendre en analyse » pour démarrer, <AppIcon name="close" /> pour
+          <strong>écarter</strong> une demande (remplacée aussitôt).
         </p>
         <p class="muted">
           Plus la partie avance, plus l'offre contient de <strong>gros budgets</strong>

@@ -11,6 +11,8 @@ import {
   MALUS_DRAW_RATIO,
   LOG_CAP,
   MIN_SPRINT_TIME,
+  HIRE_COST,
+  STAGE_PAYOUT,
 } from './constants.js';
 import { MALUS_CARDS, BONUS_CARDS } from './data.js';
 import { createIncomingProject, createTeamState } from './factory.js';
@@ -23,6 +25,11 @@ export function findStaff(team, id) {
 
 export function staffAssignedCount(team) {
   return team.activeProjects.reduce((n, p) => n + p.assigned.length, 0);
+}
+
+// CA net d'une equipe = livre - penalites - recrutements.
+export function netValue(team) {
+  return team.totalDeliveredValue - team.totalPenalties - (team.totalHiringCost || 0);
 }
 
 export function logEvent(team, msg, type = 'system', sprint = null) {
@@ -87,6 +94,17 @@ function effectiveDevs(team, project) {
 
 const PROGRESS_EPS = 1e-9;
 
+// Encaisse la part de CA associee au franchissement d'une etape. Pour la
+// livraison ('test'), on solde le reste pour que le total encaisse == p.value.
+function payStage(team, project, stageKey, sprint) {
+  const amount = stageKey === 'test'
+    ? project.value - project.earned
+    : Math.round(project.value * STAGE_PAYOUT[stageKey]);
+  project.earned += amount;
+  team.totalDeliveredValue += amount;
+  return amount;
+}
+
 // ---------------------------------------------------------------- intents joueur
 
 export function acceptProject(team, projId, sprint) {
@@ -118,6 +136,27 @@ export function rejectProject(team, projId, sprint, rng = Math.random) {
   const [proj] = team.incomingProjects.splice(idx, 1);
   logEvent(team, `DEMANDE ÉCARTÉE : ${proj.name} retirée de la file.`, 'system', sprint);
   createIncomingProject(team, rng, sprint);
+  return { ok: true };
+}
+
+// Recrute un développeur d'une spécialité donnée. Coût déduit du CA net
+// (totalHiringCost). Le dev arrive au repos (pool), immédiatement affectable.
+export function hireDev(team, spec, sprint) {
+  const cost = HIRE_COST[spec];
+  if (!cost) return { ok: false, reason: 'bad-spec' };
+  const n = team.staff.filter((s) => s.role === 'dev').length + 1;
+  const specLabel = spec === 'back' ? 'Back' : spec === 'front' ? 'Front' : 'Full';
+  const dev = {
+    id: `h${++team.hireSeq}`,
+    role: 'dev',
+    spec,
+    label: `Dev #${n} (${specLabel})`,
+    disabled: false,
+    assignedSeq: 0,
+  };
+  team.staff.push(dev);
+  team.totalHiringCost += cost;
+  logEvent(team, `RECRUTEMENT : ${dev.label} engagé (-${cost.toLocaleString('fr-FR')} €).`, 'malus', sprint);
   return { ok: true };
 }
 
@@ -261,7 +300,8 @@ export function processSprint(team, sprint, rng = Math.random) {
           if (devCount < WIP_LIMITS.dev) {
             p.stage = 'dev';
             p.progress = 0;
-            logEvent(team, `${p.name} : specs terminées -> transmis en DÉVELOPPEMENT.`, 'bonus', sprint);
+            const gain = payStage(team, p, 'analyse', sprint);
+            logEvent(team, `${p.name} : specs terminées -> DÉVELOPPEMENT (+${gain.toLocaleString('fr-FR')} €).`, 'bonus', sprint);
             freeAssigned(team, p);
           } else {
             p.progress = p.dur.analyse;
@@ -280,7 +320,8 @@ export function processSprint(team, sprint, rng = Math.random) {
           if (testCount < WIP_LIMITS.test) {
             p.stage = 'test';
             p.progress = 0;
-            logEvent(team, `${p.name} : dev terminé -> transmis en TEST / QA.`, 'bonus', sprint);
+            const gain = payStage(team, p, 'dev', sprint);
+            logEvent(team, `${p.name} : dev terminé -> TEST / QA (+${gain.toLocaleString('fr-FR')} €).`, 'bonus', sprint);
             freeAssigned(team, p);
           } else {
             p.progress = p.dur.dev;
@@ -295,9 +336,9 @@ export function processSprint(team, sprint, rng = Math.random) {
         if (p.progress >= p.dur.test - PROGRESS_EPS) {
           p.stage = 'done';
           p.progress = 0;
-          team.totalDeliveredValue += p.value;
+          const gain = payStage(team, p, 'test', sprint);
           team.totalCompletedProjects++;
-          logEvent(team, `${p.name} : recette validée -> LIVRÉ EN PRODUCTION (+${p.value.toLocaleString('fr-FR')} €) !`, 'bonus', sprint);
+          logEvent(team, `${p.name} : recette validée -> LIVRÉ EN PRODUCTION (+${gain.toLocaleString('fr-FR')} €) !`, 'bonus', sprint);
           freeAssigned(team, p);
         }
       }
@@ -318,11 +359,14 @@ export function processSprint(team, sprint, rng = Math.random) {
     }
   }
 
-  if (team.incomingProjects.length < MAX_INCOMING) createIncomingProject(team, rng, sprint);
+  // 2 nouvelles demandes par sprint (createIncomingProject plafonne à MAX_INCOMING).
+  createIncomingProject(team, rng, sprint);
+  createIncomingProject(team, rng, sprint);
 
   team.history.labels.push(`T${sprint}`);
   team.history.revenue.push(team.totalDeliveredValue);
   team.history.penalties.push(team.totalPenalties);
+  team.history.spending.push(team.totalHiringCost);
   team.history.staffUsage.push(staffAssignedCount(team));
 }
 
@@ -354,8 +398,7 @@ export function advanceSprint(game, rng = Math.random) {
     game.phase = 'finished';
     game.sprintEndsAt = null;
     for (const team of Object.values(game.teams)) {
-      const net = team.totalDeliveredValue - team.totalPenalties;
-      logEvent(team, `FIN DU CYCLE (${game.totalSprints} sprints) ! Net livré : ${net.toLocaleString('fr-FR')} €`, 'system', game.totalSprints);
+      logEvent(team, `FIN DU CYCLE (${game.totalSprints} sprints) ! Net livré : ${netValue(team).toLocaleString('fr-FR')} €`, 'system', game.totalSprints);
     }
   } else {
     game.sprintEndsAt = Date.now() + game.sprintDuration * 1000;

@@ -17,13 +17,15 @@ export function createTeamState(id, name) {
     activeMalus: [],
     totalDeliveredValue: 0,
     totalPenalties: 0,
+    totalHiringCost: 0, // cumul des recrutements de devs (déduit du CA net)
     totalCompletedProjects: 0,
     projectCounter: 1,
+    hireSeq: 0, // compteur pour l'id des devs recrutés
     assignSeq: 0, // compteur monotone : ordre d'affectation des membres (pour "les 2 derniers affectés")
     lastIncidentId: null, // dernier incident tiré : on ne rejoue jamais le même deux fois de suite
     drawnCard: null,
     log: [],
-    history: { labels: [], revenue: [], penalties: [], staffUsage: [] },
+    history: { labels: [], revenue: [], penalties: [], spending: [], staffUsage: [] },
   };
   for (let i = 0; i < 3; i++) createIncomingProject(team);
   return team;
@@ -60,6 +62,7 @@ export function createIncomingProject(team, rng = Math.random, sprint = 1) {
     name: `${tmpl.name} #${team.projectCounter}`,
     type: tmpl.type,
     value: tmpl.value,
+    earned: 0, // CA deja encaisse sur ce projet (parts d'etapes + livraison)
     stage: 'incoming',
     dur: { ...tmpl.dur },
     req: { ...tmpl.req },
