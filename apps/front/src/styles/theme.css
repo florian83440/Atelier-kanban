@@ -83,6 +83,11 @@ body {
   animation: blink 1s infinite;
 }
 
+.timer-badge.paused {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
 @keyframes blink { 50% { opacity: 0.6; } }
 
 .sprint-badge { font-size: 9.5pt; font-weight: 600; color: var(--text-muted); }
@@ -516,6 +521,7 @@ body {
   margin-bottom: 8px;
 }
 .net-banner.ok { background: #e6f6ef; border-color: var(--accent-green); color: #0a6b45; }
+.net-banner.pause { background: #fdf5e6; border-color: var(--accent-amber); color: #8a5a00; }
 .net-banner.err { cursor: pointer; }
 .net-banner.err .dismiss { font-weight: 400; opacity: 0.7; }
 
@@ -543,9 +549,26 @@ body {
 .hs-block strong { font-size: 18px; font-weight: 800; }
 .hs-block.timer strong { color: var(--accent-blue); }
 .hs-block.timer.warning strong { color: var(--accent-red); animation: blink 1s infinite; }
+.hs-block.timer.paused strong { color: var(--accent-amber); }
 
 .host-actions { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .host-view .btn { padding: 8px 14px; font-size: 12px; }
+
+/* --- pause d'animation entre deux blocs de sprints --- */
+.host-pause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--accent-amber);
+  border-left: 4px solid var(--accent-amber);
+  background: #fdf5e6;
+  padding: 14px 18px;
+}
+.host-pause .hp-main { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.host-pause .hp-main strong { font-size: 16px; }
+.host-pause .hp-btn { font-size: 14px; padding: 10px 18px; }
 
 .host-wait {
   border: 1px solid var(--border-color);

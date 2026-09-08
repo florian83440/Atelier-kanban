@@ -214,6 +214,20 @@ try {
   assert(/autre salle/i.test(dbad.message), 'Direction : assignStaff refuse (mauvaise salle)');
   console.log('  sous-roles Direction/Delivery : cloisonnement + gating OK');
 
+  // --- Pause automatique tous les 5 sprints : minuteur figé, l'hôte relance
+  for (let n = 0; n < 4; n++) {
+    host.send({ type: 'validateSprint' });
+    hs = await host.waitFor('snapshot', (m) => m.game.sprint === 3 + n || m.game.paused);
+  }
+  assert(hs.game.paused === true, 'pause auto déclenchée après le sprint 5');
+  assert(hs.game.sprintEndsAt == null, 'minuteur gelé pendant la pause');
+  assert(hs.game.sprint === 6, 'sprint 6 en attente de reprise');
+  host.send({ type: 'validateSprint' }); // ignoré pendant la pause
+  host.send({ type: 'resumeSprint' });
+  hs = await host.waitFor('snapshot', (m) => m.game.paused === false && m.game.phase === 'running');
+  assert(hs.game.sprint === 6 && hs.game.sprintEndsAt > Date.now(), 'reprise : minuteur réarmé sur le sprint 6');
+  console.log('  pause auto tous les 5 sprints + reprise : OK');
+
   // --- Reset
   host.send({ type: 'resetGame' });
   hs = await host.waitFor('snapshot', (m) => m.game.phase === 'lobby' && m.game.sprint === 1);

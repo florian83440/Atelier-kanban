@@ -10,6 +10,7 @@ import {
   assignStaff,
   unassignStaff,
   startGame,
+  resumeSprint,
   advanceSprint,
   adjustSprintTime,
   resetGame,
@@ -139,6 +140,7 @@ function buildSnapshot(room, player) {
     totalSprints: g.totalSprints,
     sprintDuration: g.sprintDuration,
     sprintEndsAt: g.sprintEndsAt,
+    paused: !!g.paused,
     serverNow: Date.now(),
   };
   const role = player.isHost ? 'host' : player.subRole || 'solo';
@@ -234,7 +236,7 @@ function handleJoinGame(ws, msg) {
 // ---------------------------------------------------------------- intents / controle
 
 const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireDev', 'assignStaff', 'unassignStaff']);
-const HOST_CONTROLS = new Set(['startGame', 'validateSprint', 'adjustTimer', 'resetGame']);
+const HOST_CONTROLS = new Set(['startGame', 'resumeSprint', 'validateSprint', 'adjustTimer', 'resetGame']);
 
 // Qui a le droit de faire quoi selon le sous-role d'equipe.
 const ROLE_INTENTS = {
@@ -299,8 +301,10 @@ function handleHostControl(ws, msg) {
   if (msg.type === 'startGame') {
     if (Object.keys(g.teams).length === 0) return err(ws, 'Aucune équipe connectée.');
     if (g.phase === 'lobby') startGame(g);
+  } else if (msg.type === 'resumeSprint') {
+    if (g.phase === 'running' && g.paused) resumeSprint(g);
   } else if (msg.type === 'validateSprint') {
-    if (g.phase === 'running') advanceSprint(g);
+    if (g.phase === 'running' && !g.paused) advanceSprint(g);
   } else if (msg.type === 'adjustTimer') {
     const n = Number(msg.seconds);
     if (Number.isFinite(n) && n !== 0) adjustSprintTime(g, Math.max(-120, Math.min(120, n)));
@@ -343,7 +347,7 @@ export function tick() {
   const now = Date.now();
   for (const room of allRooms()) {
     const g = room.game;
-    if (g.phase === 'running' && g.sprintEndsAt && now >= g.sprintEndsAt) {
+    if (g.phase === 'running' && !g.paused && g.sprintEndsAt && now >= g.sprintEndsAt) {
       advanceSprint(g);
       broadcastRoom(room);
       if (g.phase === 'finished') sendGameOver(room);

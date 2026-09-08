@@ -18,6 +18,7 @@ import LiaisonRoom from './LiaisonRoom.vue';
 const team = computed(() => state.team);
 const sprint = computed(() => state.game?.sprint ?? 1);
 const phase = computed(() => state.game?.phase ?? 'lobby');
+const paused = computed(() => !!state.game?.paused && phase.value === 'running');
 const subRole = computed(() => state.you?.subRole || 'solo');
 const roleLabel = computed(() => ({
   direction: 'Direction', delivery: 'Delivery', liaison: 'Passerelle', solo: '',
@@ -54,6 +55,11 @@ const endHistory = computed(
 
     <div v-if="phase === 'lobby'" class="net-banner ok">
       Connecté à la partie <strong>{{ state.code }}</strong> — en attente du démarrage par l'hôte.
+    </div>
+
+    <div v-if="paused" class="net-banner pause">
+      <AppIcon name="frozen" /> <strong>Pause</strong> — l'animateur explique les changements.
+      Le sprint {{ sprint }} reprendra quand l'hôte relancera le minuteur.
     </div>
 
     <div v-if="state.error" class="net-banner err" @click="dismissError">

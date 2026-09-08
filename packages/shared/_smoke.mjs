@@ -2,10 +2,10 @@ import {
   createGameState, createTeamState, startGame, advanceSprint,
   acceptProject, rejectProject, assignStaff, unassignStaff, disableRole,
   devEffectiveness, drawIncident, createIncomingProject, hireDev, netValue, bugPenalty,
-  negotiateTerms, renegotiateDeadline,
+  negotiateTerms, renegotiateDeadline, resumeSprint,
   TOTAL_SPRINTS, PROJECT_TEMPLATES, HIRE_COST, STAGE_PAYOUT,
   MAINTENANCE_BUG_CAP, MAINTENANCE_BUG_PENALTY_RATE, PENALTY,
-  RENEGOTIATE_MAX,
+  RENEGOTIATE_MAX, PAUSE_EVERY_SPRINTS,
 } from './src/index.js';
 
 const round100 = (n) => Math.round(n / 100) * 100;
@@ -468,6 +468,32 @@ function rng32(seed) {
   if (r.ok || r.reason !== 'reneg-max') throw new Error('renégo plafonnée à ' + RENEGOTIATE_MAX);
 
   console.log('[14] Négociation de contrat (délai × périmètre) + renégociation : OK');
+}
+
+// ---- 15) Pause d'animation tous les PAUSE_EVERY_SPRINTS sprints + reprise ----
+{
+  const game = createGameState('PSE', 'h1');
+  game.teams.t1 = createTeamState('t1', 'Solo');
+  startGame(game);
+  if (game.paused) throw new Error('pas de pause au démarrage');
+
+  for (let i = 0; i < PAUSE_EVERY_SPRINTS - 1; i++) advanceSprint(game, () => 0.5);
+  if (game.paused) throw new Error(`pas de pause avant d'avoir validé ${PAUSE_EVERY_SPRINTS} sprints`);
+
+  advanceSprint(game, () => 0.5); // valide le sprint PAUSE_EVERY_SPRINTS
+  if (!game.paused) throw new Error(`pause attendue après le sprint ${PAUSE_EVERY_SPRINTS}`);
+  if (game.sprintEndsAt !== null) throw new Error('minuteur doit être gelé pendant la pause');
+  if (game.sprint !== PAUSE_EVERY_SPRINTS + 1) throw new Error('le sprint suivant est en attente de reprise');
+
+  resumeSprint(game);
+  if (game.paused) throw new Error('resumeSprint doit lever la pause');
+  if (!game.sprintEndsAt) throw new Error('resumeSprint doit réarmer le minuteur');
+
+  for (let i = 0; i < PAUSE_EVERY_SPRINTS - 1; i++) advanceSprint(game, () => 0.5);
+  if (game.paused) throw new Error('pas de pause avant la fin du 2e bloc');
+  advanceSprint(game, () => 0.5);
+  if (!game.paused) throw new Error('2e pause attendue après le bloc suivant');
+  console.log('[15] Pause auto tous les', PAUSE_EVERY_SPRINTS, 'sprints + reprise manuelle : OK');
 }
 
 console.log('SMOKE LOGIQUE OK');

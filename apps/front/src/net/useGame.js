@@ -139,6 +139,7 @@ export function malusLeft(team, staffId) {
 
 // ---- actions hote -------------------------------------------------
 export function hostStart() { send({ type: 'startGame' }); }
+export function hostResume() { send({ type: 'resumeSprint' }); }
 export function hostValidate() { send({ type: 'validateSprint' }); }
 export function hostAdjustTimer(seconds) { send({ type: 'adjustTimer', seconds }); }
 export function hostReset() { send({ type: 'resetGame' }); }

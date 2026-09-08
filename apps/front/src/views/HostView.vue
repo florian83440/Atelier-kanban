@@ -4,11 +4,12 @@ import {
   state,
   clearSession,
   hostStart,
+  hostResume,
   hostValidate,
   hostAdjustTimer,
   hostReset,
 } from '../net/useGame.js';
-import { TIMER_STEP, netValue } from '@kanban-it/shared';
+import { TIMER_STEP, netValue, PAUSE_EVERY_SPRINTS } from '@kanban-it/shared';
 import { useCountdown } from '../lib/useCountdown.js';
 import TeamSummaryCard from '../components/host/TeamSummaryCard.vue';
 import EndModal from '../components/EndModal.vue';
@@ -21,12 +22,17 @@ const { label: timerLabel, warning } = useCountdown();
 const phase = computed(() => state.game?.phase ?? 'lobby');
 const sprint = computed(() => state.game?.sprint ?? 1);
 const totalSprints = computed(() => state.game?.totalSprints ?? 20);
+const paused = computed(() => !!state.game?.paused && phase.value === 'running');
 const teams = computed(() => state.teams || []);
 const hasTeams = computed(() => teams.value.length > 0);
 
 const phaseLabel = computed(() =>
-  phase.value === 'lobby' ? 'En attente' : phase.value === 'running' ? 'En cours' : 'Terminée',
+  phase.value === 'lobby' ? 'En attente'
+    : phase.value === 'finished' ? 'Terminée'
+      : paused.value ? 'En pause' : 'En cours',
 );
+// Bloc de sprints qui vient d'etre valide (5, 10, 15...) au moment d'une pause.
+const pausedAfter = computed(() => (paused.value ? sprint.value - 1 : 0));
 
 const totalNet = computed(() =>
   teams.value.reduce((n, t) => n + netValue(t), 0),
@@ -71,8 +77,8 @@ const inspectTeam = computed(() => teams.value.find((t) => t.id === inspectId.va
           <strong v-if="phase === 'lobby'">—</strong>
           <strong v-else>{{ sprint }} / {{ totalSprints }}</strong>
         </div>
-        <div v-if="phase === 'running'" class="hs-block timer" :class="{ warning }">
-          <span>Temps</span><strong>{{ timerLabel }}</strong>
+        <div v-if="phase === 'running'" class="hs-block timer" :class="{ warning: warning && !paused, paused }">
+          <span>Temps</span><strong>{{ paused ? 'PAUSE' : timerLabel }}</strong>
         </div>
         <div class="hs-block">
           <span>Statut</span><strong>{{ phaseLabel }}</strong>
@@ -92,13 +98,16 @@ const inspectTeam = computed(() => teams.value.find((t) => t.id === inspectId.va
         <button class="btn btn-primary" :disabled="phase !== 'lobby' || !hasTeams" @click="hostStart">
           <AppIcon name="play" /> Démarrer
         </button>
-        <button class="btn btn-secondary" :disabled="phase !== 'running'" @click="hostValidate">
+        <button v-if="paused" class="btn btn-primary" @click="hostResume">
+          <AppIcon name="play" /> Reprendre le sprint {{ sprint }}
+        </button>
+        <button class="btn btn-secondary" :disabled="phase !== 'running' || paused" @click="hostValidate">
           Valider le sprint <AppIcon name="arrowRight" />
         </button>
         <button
           class="btn btn-secondary"
           :title="`Retirer ${TIMER_STEP} s au sprint`"
-          :disabled="phase !== 'running'"
+          :disabled="phase !== 'running' || paused"
           @click="hostAdjustTimer(-TIMER_STEP)"
         >
           <AppIcon name="minus" /> {{ TIMER_STEP }} s
@@ -106,7 +115,7 @@ const inspectTeam = computed(() => teams.value.find((t) => t.id === inspectId.va
         <button
           class="btn btn-secondary"
           :title="`Ajouter ${TIMER_STEP} s au sprint`"
-          :disabled="phase !== 'running'"
+          :disabled="phase !== 'running' || paused"
           @click="hostAdjustTimer(TIMER_STEP)"
         >
           <AppIcon name="plus" /> {{ TIMER_STEP }} s
@@ -117,6 +126,19 @@ const inspectTeam = computed(() => teams.value.find((t) => t.id === inspectId.va
         <button class="btn btn-secondary" @click="clearSession()">Quitter</button>
       </div>
     </header>
+
+    <div v-if="paused" class="host-pause">
+      <div class="hp-main">
+        <AppIcon name="frozen" />
+        <span>
+          <strong>PAUSE après le sprint {{ pausedAfter }}</strong> — minuteur arrêté.
+          Expliquez les changements / la trame, puis relancez.
+        </span>
+      </div>
+      <button class="btn btn-primary hp-btn" @click="hostResume">
+        <AppIcon name="play" /> Reprendre le sprint {{ sprint }}
+      </button>
+    </div>
 
     <div v-if="!hasTeams" class="host-wait">
       En attente de joueurs. Communiquez le code <strong>{{ state.code }}</strong> :

@@ -10,6 +10,11 @@ export const DEFAULT_SPRINT_TIME = 60;
 export const TIMER_STEP = 30;
 export const MIN_SPRINT_TIME = 5;
 
+// Pause automatique du cycle : apres chaque bloc de N sprints valides, le minuteur
+// s'arrete et l'hote doit relancer a la main (temps d'expliquer les changements /
+// declencher une trame). 0 = jamais de pause automatique.
+export const PAUSE_EVERY_SPRINTS = 5;
+
 // Penalite appliquee (echeance depassee, bug prod non resolu)
 export const PENALTY = 5000;
 

@@ -90,6 +90,7 @@ export function createGameState(code, hostId) {
     totalSprints: TOTAL_SPRINTS,
     sprintDuration: DEFAULT_SPRINT_TIME,
     sprintEndsAt: null,
+    paused: false, // pause d'animation entre deux blocs de sprints (relance manuelle)
     teams: {},
   };
 }

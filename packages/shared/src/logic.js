@@ -11,6 +11,7 @@ import {
   MALUS_DRAW_RATIO,
   LOG_CAP,
   MIN_SPRINT_TIME,
+  PAUSE_EVERY_SPRINTS,
   MAINTENANCE_BUG_CAP,
   MAINTENANCE_BUG_PENALTY_RATE,
   HIRE_COST,
@@ -458,9 +459,20 @@ export function processSprint(team, sprint, rng = Math.random) {
 export function startGame(game) {
   game.phase = 'running';
   game.sprint = 1;
+  game.paused = false;
   game.sprintEndsAt = Date.now() + game.sprintDuration * 1000;
   for (const team of Object.values(game.teams)) {
     logEvent(team, `Partie démarrée — Sprint 1.`, 'system', 1);
+  }
+}
+
+// L'hote relance le minuteur apres une pause d'animation.
+export function resumeSprint(game) {
+  if (game.phase !== 'running' || !game.paused) return;
+  game.paused = false;
+  game.sprintEndsAt = Date.now() + game.sprintDuration * 1000;
+  for (const team of Object.values(game.teams)) {
+    logEvent(team, `Reprise — Sprint ${game.sprint}.`, 'system', game.sprint);
   }
 }
 
@@ -479,9 +491,18 @@ export function advanceSprint(game, rng = Math.random) {
   game.sprint++;
   if (game.sprint > game.totalSprints) {
     game.phase = 'finished';
+    game.paused = false;
     game.sprintEndsAt = null;
     for (const team of Object.values(game.teams)) {
       logEvent(team, `FIN DU CYCLE (${game.totalSprints} sprints) ! Net livré : ${netValue(team).toLocaleString('fr-FR')} €`, 'system', game.totalSprints);
+    }
+  } else if (PAUSE_EVERY_SPRINTS > 0 && (game.sprint - 1) % PAUSE_EVERY_SPRINTS === 0) {
+    // On vient de valider un multiple de PAUSE_EVERY_SPRINTS : on gele le minuteur,
+    // l'hote reprend la main pour expliquer les changements avant de relancer.
+    game.paused = true;
+    game.sprintEndsAt = null;
+    for (const team of Object.values(game.teams)) {
+      logEvent(team, `PAUSE après le Sprint ${game.sprint - 1} — l'animateur intervient. L'hôte relancera le minuteur.`, 'system', game.sprint - 1);
     }
   } else {
     game.sprintEndsAt = Date.now() + game.sprintDuration * 1000;
@@ -506,6 +527,7 @@ export function adjustSprintTime(game, deltaSeconds) {
 export function resetGame(game) {
   game.phase = 'lobby';
   game.sprint = 1;
+  game.paused = false;
   game.sprintEndsAt = null;
   for (const id of Object.keys(game.teams)) {
     const prev = game.teams[id];
