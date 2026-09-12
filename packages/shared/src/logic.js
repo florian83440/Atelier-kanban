@@ -213,24 +213,35 @@ export function rejectProject(team, projId, sprint, rng = Math.random) {
   return { ok: true };
 }
 
-// Recrute un développeur d'une spécialité donnée. Coût déduit du CA net
-// (totalHiringCost). Le dev arrive au repos (pool), immédiatement affectable.
-export function hireDev(team, spec, sprint) {
-  const cost = HIRE_COST[spec];
-  if (!cost) return { ok: false, reason: 'bad-spec' };
-  const n = team.staff.filter((s) => s.role === 'dev').length + 1;
-  const specLabel = spec === 'back' ? 'Back' : spec === 'front' ? 'Front' : 'Full';
-  const dev = {
+// Correspondance kind (bouton de recrutement) -> role/spec/etiquette du staff.
+const HIRE_KIND = {
+  front: { role: 'dev', spec: 'front', label: 'Dev' },
+  back: { role: 'dev', spec: 'back', label: 'Dev' },
+  full: { role: 'dev', spec: 'full', label: 'Dev' },
+  analyst: { role: 'analyst', spec: 'all', label: 'PO' },
+  qa: { role: 'qa', spec: 'all', label: 'QA' },
+};
+
+// Recrute un membre d'equipe (dev/PO/QA) d'un type donne. Cout deduit du CA
+// net (totalHiringCost). Le membre arrive au repos (pool), immediatement affectable.
+export function hireStaff(team, kind, sprint) {
+  const cost = HIRE_COST[kind];
+  const meta = HIRE_KIND[kind];
+  if (!cost || !meta) return { ok: false, reason: 'bad-spec' };
+  const n = team.staff.filter((s) => s.role === meta.role).length + 1;
+  const specLabel = kind === 'back' ? 'Back' : kind === 'front' ? 'Front' : kind === 'full' ? 'Full' : '';
+  const label = specLabel ? `${meta.label} #${n} (${specLabel})` : `${meta.label} #${n}`;
+  const member = {
     id: `h${++team.hireSeq}`,
-    role: 'dev',
-    spec,
-    label: `Dev #${n} (${specLabel})`,
+    role: meta.role,
+    spec: meta.spec,
+    label,
     disabled: false,
     assignedSeq: 0,
   };
-  team.staff.push(dev);
+  team.staff.push(member);
   team.totalHiringCost += cost;
-  logEvent(team, `RECRUTEMENT : ${dev.label} engagé (-${cost.toLocaleString('fr-FR')} €).`, 'malus', sprint);
+  logEvent(team, `RECRUTEMENT : ${label} engagé (-${cost.toLocaleString('fr-FR')} €).`, 'malus', sprint);
   return { ok: true };
 }
 

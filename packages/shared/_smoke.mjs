@@ -1,7 +1,7 @@
 import {
   createGameState, createTeamState, startGame, advanceSprint,
   acceptProject, rejectProject, assignStaff, unassignStaff, disableRole,
-  devEffectiveness, drawIncident, createIncomingProject, hireDev, netValue, bugPenalty,
+  devEffectiveness, drawIncident, createIncomingProject, hireStaff, netValue, bugPenalty,
   negotiateTerms, renegotiateDeadline, resumeSprint,
   TOTAL_SPRINTS, PROJECT_TEMPLATES, HIRE_COST, STAGE_PAYOUT,
   MAINTENANCE_BUG_CAP, MAINTENANCE_BUG_PENALTY_RATE, PENALTY,
@@ -296,27 +296,39 @@ function rng32(seed) {
   console.log('[9] 2 demandes / sprint, plafond 4 : OK');
 }
 
-// ---- 10) Recrutement de devs : cout deduit du CA net, dev dispo immediatement ----
+// ---- 10) Recrutement (dev/PO/QA) : cout deduit du CA net, membre dispo immediatement ----
 {
   const team = createTeamState('t1', 'Solo');
   const devsBefore = team.staff.filter((s) => s.role === 'dev').length;
   team.totalDeliveredValue = 100000;
   if (netValue(team) !== 100000) throw new Error('net initial = CA livre');
 
-  let r = hireDev(team, 'full', 1);
-  if (!r.ok) throw new Error('hireDev full doit reussir');
+  let r = hireStaff(team, 'full', 1);
+  if (!r.ok) throw new Error('hireStaff full doit reussir');
   if (team.totalHiringCost !== HIRE_COST.full) throw new Error('cout full = ' + HIRE_COST.full);
   if (netValue(team) !== 100000 - HIRE_COST.full) throw new Error('net = CA - recrutement');
 
-  r = hireDev(team, 'back', 1);
+  r = hireStaff(team, 'back', 1);
   if (netValue(team) !== 100000 - HIRE_COST.full - HIRE_COST.back) throw new Error('cumul recrutement');
 
   const devsAfter = team.staff.filter((s) => s.role === 'dev');
   if (devsAfter.length !== devsBefore + 2) throw new Error('2 devs ajoutes a l\'effectif');
   const last = devsAfter[devsAfter.length - 1];
   if (last.spec !== 'back' || last.disabled) throw new Error('le dev recrute est dispo, du bon type');
-  if (hireDev(team, 'senior', 1).ok) throw new Error('specialite inconnue doit echouer');
-  console.log('[10] Recrutement : cout deduit du net, dev dispo : OK');
+  if (hireStaff(team, 'senior', 1).ok) throw new Error('type inconnu doit echouer');
+
+  const analystsBefore = team.staff.filter((s) => s.role === 'analyst').length;
+  const qasBefore = team.staff.filter((s) => s.role === 'qa').length;
+  r = hireStaff(team, 'analyst', 1);
+  if (!r.ok) throw new Error('hireStaff analyst doit reussir');
+  r = hireStaff(team, 'qa', 1);
+  if (!r.ok) throw new Error('hireStaff qa doit reussir');
+  if (team.staff.filter((s) => s.role === 'analyst').length !== analystsBefore + 1) throw new Error('1 PO ajoute a l\'effectif');
+  if (team.staff.filter((s) => s.role === 'qa').length !== qasBefore + 1) throw new Error('1 QA ajoute a l\'effectif');
+  if (netValue(team) !== 100000 - HIRE_COST.full - HIRE_COST.back - HIRE_COST.analyst - HIRE_COST.qa) {
+    throw new Error('cumul recrutement PO/QA');
+  }
+  console.log('[10] Recrutement (dev/PO/QA) : cout deduit du net, membre dispo : OK');
 }
 
 // ---- 11) CA encaisse par etapes : analyse 5% / dev 20% / livraison 75% ----

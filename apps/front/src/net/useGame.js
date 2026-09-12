@@ -116,7 +116,7 @@ export function joinGame({ name, code, teamName, subRole }) {
 export function acceptProject(projectId, terms = null) { send({ type: 'acceptProject', projectId, terms }); }
 export function rejectProject(projectId) { send({ type: 'rejectProject', projectId }); }
 export function renegotiateDeadline(projectId) { send({ type: 'renegotiateDeadline', projectId }); }
-export function hireDev(spec) { send({ type: 'hireDev', spec }); }
+export function hireStaff(kind) { send({ type: 'hireStaff', kind }); }
 export function assignStaff(staffId, projectId) { send({ type: 'assignStaff', staffId, projectId }); }
 export function unassignStaff(staffId) { send({ type: 'unassignStaff', staffId }); }
 

@@ -35,8 +35,14 @@ export const MALUS_DRAW_RATIO = 0.7;
 // Taille max du journal de bord conserve par equipe
 export const LOG_CAP = 60;
 
-// Cout de recrutement d'un developpeur (deduit du CA net)
-export const HIRE_COST = { front: 10000, back: 10000, full: 17500 };
+// Cout de recrutement d'un membre d'equipe (deduit du CA net)
+export const HIRE_COST = {
+  front: 10000,
+  back: 10000,
+  full: 17500,
+  analyst: 10000, // PO
+  qa: 8000,
+};
 
 // Repartition du CA d'un projet : une part est encaissee a la fin de chaque
 // etape, la livraison (test -> production) represente l'essentiel. Somme = 1.

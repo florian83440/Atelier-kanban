@@ -6,7 +6,7 @@ import {
   acceptProject,
   rejectProject,
   renegotiateDeadline,
-  hireDev,
+  hireStaff,
   assignStaff,
   unassignStaff,
   startGame,
@@ -235,13 +235,13 @@ function handleJoinGame(ws, msg) {
 
 // ---------------------------------------------------------------- intents / controle
 
-const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireDev', 'assignStaff', 'unassignStaff']);
+const PLAYER_INTENTS = new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireStaff', 'assignStaff', 'unassignStaff']);
 const HOST_CONTROLS = new Set(['startGame', 'resumeSprint', 'validateSprint', 'adjustTimer', 'resetGame']);
 
 // Qui a le droit de faire quoi selon le sous-role d'equipe.
 const ROLE_INTENTS = {
   solo: PLAYER_INTENTS,
-  direction: new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireDev']),
+  direction: new Set(['acceptProject', 'rejectProject', 'renegotiateDeadline', 'hireStaff']),
   delivery: new Set(['assignStaff', 'unassignStaff']),
   liaison: new Set(), // passerelle : lecture seule
 };
@@ -250,7 +250,7 @@ const INTENT_ERRORS = {
   wip: 'Colonne Analyse pleine (max 4) — impossible d\'accepter une nouvelle demande.',
   'not-found': 'Cette demande n\'existe plus (déjà prise ou sprint validé). Rechargez si besoin.',
   blocked: 'Ce membre est indisponible.',
-  'bad-spec': 'Spécialité de dev inconnue.',
+  'bad-spec': 'Type de recrutement inconnu.',
   'not-running': 'La partie n\'a pas encore démarré.',
   'wrong-room': 'Cette action est gérée par l\'autre salle de votre équipe.',
   'too-late': 'Projet déjà livré — renégociation impossible.',
@@ -280,9 +280,9 @@ function handlePlayerIntent(ws, msg) {
   if (msg.type === 'acceptProject') res = acceptProject(team, msg.projectId, room.game.sprint, msg.terms || null);
   else if (msg.type === 'rejectProject') res = rejectProject(team, msg.projectId, room.game.sprint);
   else if (msg.type === 'renegotiateDeadline') res = renegotiateDeadline(team, msg.projectId, room.game.sprint);
-  else if (msg.type === 'hireDev') {
+  else if (msg.type === 'hireStaff') {
     res = room.game.phase === 'running'
-      ? hireDev(team, msg.spec, room.game.sprint)
+      ? hireStaff(team, msg.kind, room.game.sprint)
       : { ok: false, reason: 'not-running' };
   } else if (msg.type === 'assignStaff') res = assignStaff(team, msg.staffId, msg.projectId);
   else if (msg.type === 'unassignStaff') res = unassignStaff(team, msg.staffId);

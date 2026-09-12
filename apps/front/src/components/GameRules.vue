@@ -69,9 +69,11 @@ const bugPct = Math.round(MAINTENANCE_BUG_CHANCE * 100);
       <section class="rules-card">
         <h3><AppIcon name="plus" /> Recrutement</h3>
         <p>
-          Engagez des devs à tout moment :
-          <strong>Back / Front {{ (HIRE_COST.front / 1000) }} k€</strong>,
-          <strong>Full {{ (HIRE_COST.full / 1000) }} k€</strong>.
+          Engagez du personnel à tout moment :
+          <strong>Dev Back / Front {{ (HIRE_COST.front / 1000) }} k€</strong>,
+          <strong>Dev Full {{ (HIRE_COST.full / 1000) }} k€</strong>,
+          <strong>PO {{ (HIRE_COST.analyst / 1000) }} k€</strong>,
+          <strong>QA {{ (HIRE_COST.qa / 1000) }} k€</strong>.
         </p>
         <p class="muted">Le coût est déduit du CA net — plus vite mais moins rentable.</p>
       </section>

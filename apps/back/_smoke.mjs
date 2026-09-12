@@ -114,7 +114,7 @@ try {
 
   // --- Recruter un dev : effectif +1, cout deduit du net
   const staffBefore = s1.team.staff.length;
-  p1.send({ type: 'hireDev', spec: 'full' });
+  p1.send({ type: 'hireStaff', kind: 'full' });
   s1 = await p1.waitFor('snapshot', (m) => m.team.staff.length === staffBefore + 1);
   assert(s1.team.totalHiringCost === 17500, 'recrutement full = 17 500 €');
 
